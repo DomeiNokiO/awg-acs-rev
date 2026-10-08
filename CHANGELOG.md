@@ -12,6 +12,30 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0. Installer (`deploy/install.sh`) — CT Proxmox Ubuntu/Debian
+
+Diuji di container dengan batas RAM **1 GB**: Ubuntu 22.04, Ubuntu 24.04,
+Debian 12, Debian 13 — instal baru, instal ulang/update, mode interaktif via
+terminal, dan jalur systemd (unit aktif + enabled, berjalan sebagai user `acs`).
+
+| Masalah | Penyebab | Perbaikan |
+|---------|----------|-----------|
+| Berhenti di `tr: write error: Broken pipe` (baris 108) | `tr </dev/urandom \| head -c 12` + `set -o pipefail`: `tr` mati SIGPIPE (exit 141) → `set -e` menghentikan installer | Pembuat string acak tanpa SIGPIPE (`head -c 256 /dev/urandom \| tr -dc …`) |
+| Build UI `Killed` (exit 137) di CT 1 GB | Next.js 16 Turbopack memakai > 1 GB | RAM efektif dideteksi (MemTotal + batas cgroup di sepanjang hierarki); < 3 GB → build webpack hemat memori (`ACS_BUILD_LOWMEM=1`, satu worker, heap 512 MB) — terukur lolos di 768 MB & 1 GB; mesin besar otomatis turun ke mode hemat bila build biasa gagal |
+| Update gagal `detected dubious ownership` | Repo dimiliki user `acs`, git dijalankan root (git ≥ 2.35.2) | `git -c safe.directory=$APP_DIR`; update = `fetch --depth 1` + `reset --hard FETCH_HEAD` |
+| Layanan gagal `226/NAMESPACE` di CT unprivileged | `PrivateTmp`/`ProtectSystem` butuh mount namespace | Opsi sandbox hanya dipasang di VM/bare metal (`systemd-detect-virt -c`) |
+| Node.js gagal/terlalu lama | Hanya NodeSource `setup_22.x`; bentrok paket `libnode` Ubuntu | Node 24 LTS via repo NodeSource (keyring), paket `nodejs/libnode` distro dibersihkan; cadangan biner resmi nodejs.org; Node ≥ 22.18 yang ada dipakai |
+| Instal ulang menimpa konfigurasi | `.env` ditulis ulang dari default | `.env` lama jadi default (tanpa menimpa env yang di-export); DB & TLS dipertahankan; ringkasan menyatakan password admin lama tidak berubah |
+| Sisa script "termakan" pada `curl \| bash` | Perintah anak bisa membaca stdin | Seluruh script dalam satu blok `{ … }` + `exec </dev/null` |
+| Error sulit dilacak | Output dipotong `tail -3` | Semua output ke `/var/log/acs-install.log`; langkah gagal mencetak 30 baris terakhir; health check 30 detik + 30 baris journal bila gagal |
+| `$ID` kosong / distro turunan | `case "$ID"` tanpa `ID_LIKE`, `set -u` | Deteksi `ID`/`ID_LIKE`; arsitektur x86_64/aarch64; Debian 11 diberi peringatan EOL |
+| Tanpa systemd (Docker) installer gagal | `systemctl` wajib | Fallback menjalankan ACS di latar belakang via `setpriv` sebagai user `acs` |
+| Validasi input | Port/password tidak divalidasi | Port 1–65535 dan tidak boleh sama; password 8–64 karakter aman untuk `.env`; port < 1024 → `CAP_NET_BIND_SERVICE` |
+| `apt` 404 sesaat | Mirror sedang sinkron | `apt-get install` dicoba ulang setelah `apt-get update` |
+
+`ACS_ENABLE_FS` dihapus (tidak ada listener FS terpisah). Variabel baru:
+`ACS_NONINTERACTIVE`, `REPO_BRANCH`, `NODE_MAJOR`.
+
 ## 1. Ringkasan akar masalah
 
 | # | Gejala | Akar masalah | Perbaikan |

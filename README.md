@@ -80,35 +80,67 @@ Tanpa `ACS_ADMIN_PASSWORD`, akun admin dibuat dengan password acak yang
 
 ### Instalasi otomatis di Proxmox CT / VPS
 
-Installer `deploy/install.sh` — tanpa Docker, muat di CT unprivileged 1 vCPU /
-1 GB RAM. Cara pakai di dalam CT:
+Installer `deploy/install.sh` — tanpa Docker. Diuji di **Ubuntu 22.04 / 24.04**
+dan **Debian 12 / 13** (x86_64/aarch64), termasuk batas RAM **1 GB**.
+Debian 11 sudah EOL (repo security mulai 404) — gunakan template Debian 12/13.
+Cara pakai di dalam CT (sebagai root):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DomeiNokiO/awg-acs-rev/refs/heads/main/deploy/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DomeiNokiO/awg-acs-rev/main/deploy/install.sh | bash
 ```
+
+Jalankan perintah yang sama untuk **update** — database, `.env`, dan sertifikat
+TLS dipertahankan, akun admin tidak diubah.
 
 Apa yang dilakukan:
 
-- Pasang paket sistem + **Node.js 22+**, buat user `acs`, clone repo
-- `npm install`, **build UI** (Next.js static export)
-- Tulis `.env` (port/bind/TLS/kredensial), buat **sertifikat TLS self-signed**
-  opsional, pasang **systemd unit `acs`**, buka firewall (ufw)
-- Mulai layanan + lakukan **health check**
-- Cetak ringkasan: alamat UI/API/CWMP, login, database, cara log
+- Pasang paket dasar (`curl git gnupg openssl xz-utils`) dan **Node.js 24 LTS**
+  dari repo NodeSource; bila gagal, otomatis memakai biner resmi nodejs.org.
+  Node ≥ 22.18 yang sudah terpasang dipakai apa adanya.
+- Buat user sistem `acs`, clone repo ke `/opt/acs` (atau `git fetch` + reset
+  saat update; aman dari error *dubious ownership*).
+- `npm ci`, lalu **build UI**. RAM efektif (termasuk batas cgroup) < 3 GB →
+  mode hemat memori (webpack, satu worker) yang terukur lolos di 768 MB–1 GB;
+  build Turbopack biasa di-OOM-kill di CT 1 GB. Mesin besar memakai mode biasa
+  dan otomatis turun ke mode hemat bila gagal.
+- Tulis `/opt/acs/.env`, sertifikat **TLS self-signed** opsional, dan
+  **systemd unit `acs`**. Di dalam container (LXC) opsi sandbox berbasis mount
+  namespace tidak dipasang karena membuat layanan gagal start
+  (`status=226/NAMESPACE`) di CT unprivileged tanpa *nesting*.
+- Start layanan, **health check** `/api/health` (hingga 30 detik; bila gagal,
+  30 baris log journal ditampilkan), buka port di ufw bila ufw aktif.
+- Semua output perintah panjang ada di `/var/log/acs-install.log`; bila satu
+  langkah gagal, 30 baris terakhirnya dicetak.
 
-Variabel lingkungan untuk mode non-interaktif (otomasi):
+Variabel untuk mode non-interaktif (`export` dulu di baris terpisah):
+
+```bash
+export ACS_NONINTERACTIVE=1 ACS_ADMIN_PASSWORD='Rahasia-123'
+curl -fsSL https://raw.githubusercontent.com/DomeiNokiO/awg-acs-rev/main/deploy/install.sh | bash
+```
 
 | Variabel | Default | Fungsi |
 |----------|---------|--------|
-| `ACS_ADMIN_PASSWORD` | acak | Password admin awal |
+| `ACS_NONINTERACTIVE` | — | `1` = jangan bertanya, pakai env/default (otomatis bila tidak ada terminal) |
+| `ACS_ADMIN_PASSWORD` | acak | Password admin awal (8–64: huruf, angka, `@#%+=:,._-`) |
 | `ACS_BIND` | `0.0.0.0` | Bind address |
 | `ACS_CWMP_PORT` | `7547` | Port CWMP |
 | `ACS_API_PORT` | `8080` | Port API/UI |
-| `ACS_ENABLE_CWMP` | `1` | Aktif/tidak port CWMP |
-| `ACS_ENABLE_NBI` | `1` | Aktif/tidak REST API |
-| `ACS_ENABLE_FS` | `1` | Aktif/tidak file server |
-| `ACS_ENABLE_UI` | `1` | Aktif/tidak UI |
+| `ACS_ENABLE_CWMP` / `ACS_ENABLE_NBI` / `ACS_ENABLE_UI` | `1` | Aktif/tidak listener |
 | `ACS_ENABLE_TLS` | `0` | Buat TLS self-signed |
+| `REPO_URL` / `REPO_BRANCH` | repo ini / `main` | Sumber kode |
+| `APP_DIR` / `DATA_DIR` | `/opt/acs` / `/opt/acs/data` | Lokasi instalasi & data |
+| `NODE_MAJOR` | `24` | Versi Node yang dipasang bila belum ada |
+
+Pemecahan masalah:
+
+| Gejala | Penyebab / solusi |
+|--------|-------------------|
+| `curl: (22) ... 404` sesaat setelah push | Cache raw.githubusercontent.com belum segar — tunggu 1–2 menit |
+| `tr: write error: Broken pipe` lalu berhenti | Installer versi lama (pembuat password acak memicu SIGPIPE). Versi ini sudah diperbaiki |
+| `apt-get install gagal` dengan 404 di Debian 11 | Debian 11 EOL; pakai template Debian 12/13 |
+| Build UI `Killed` / exit 137 | Kehabisan RAM. Installer sudah memakai mode hemat; bila RAM < 768 MB, naikkan RAM/swap CT |
+| Layanan gagal `226/NAMESPACE` | Unit lama dengan sandbox; jalankan ulang installer (unit ditulis ulang) atau aktifkan *nesting* CT |
 
 Variabel lingkungan (waktu jalankan server):
 
