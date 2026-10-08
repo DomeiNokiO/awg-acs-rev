@@ -13,7 +13,7 @@ import Fastify from 'fastify';
 import { Database, TaskQueue, hashPassword } from '@acs/core';
 import {
   registerCwmpRoutes, type CwmpContext, enqueueRead, enqueueDiscover as enqueueDiscovery,
-  continueDiscovery, collectPaths, PROFILE_VERSION,
+  continueDiscovery, collectPaths, hotPaths, maybeProvisionCrCreds, PROFILE_VERSION,
 } from './cwmp.ts';
 import { registerApiRoutes } from './api.ts';
 import { loadCatalog } from './catalog.ts';
@@ -21,8 +21,8 @@ import { applyPresets, seedDefaultPresets } from './presets.ts';
 import { WebhookDispatcher } from './webhooks.ts';
 import { loadCredentials } from './cwmp-auth.ts';
 import { access } from 'node:fs/promises';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 
@@ -104,6 +104,36 @@ async function main(): Promise<void> {
   })();
   ctx.collectIntervalMin = collectIntervalMin;
 
+  // Pembacaan profil penuh paling sering tiap N jam (default 6); di antaranya
+  // hanya leaf panas yang dibaca.
+  const fullCollectMs = (() => {
+    const n = Number(process.env['ACS_FULL_COLLECT_HOURS'] ?? 6);
+    return (Number.isFinite(n) && n > 0 ? n : 6) * 3600 * 1000;
+  })();
+
+  // Kredensial Connection Request yang dipasang ACS pada ONU (agar tombol
+  // Hubungi bisa mengautentikasi). ACS_CR_AUTO=0 menonaktifkan. Password
+  // dari ACS_CR_PASS, atau dibuat acak sekali dan disimpan di samping DB.
+  ctx.crCreds = (() => {
+    if ((process.env['ACS_CR_AUTO'] ?? '1') === '0') return null;
+    const user = (process.env['ACS_CR_USER'] ?? 'acs').trim() || 'acs';
+    let pass = (process.env['ACS_CR_PASS'] ?? '').trim();
+    if (!pass) {
+      const file = join(dirname(DB_FILE), 'cr.secret');
+      try {
+        pass = existsSync(file) ? readFileSync(file, 'utf8').trim() : '';
+        if (!pass) {
+          pass = randomBytes(12).toString('base64url');
+          writeFileSync(file, `${pass}\n`, { mode: 0o600 });
+        }
+      } catch (e) {
+        console.error('[cr] tidak bisa menyimpan cr.secret:', (e as Error).message);
+        return null;
+      }
+    }
+    return { user, pass };
+  })();
+
   function applyPresetsSafe(deviceId: string, events: string[]): void {
     try {
       const report = applyPresets(ctx, db, deviceId, { events });
@@ -131,17 +161,30 @@ async function main(): Promise<void> {
         // Pemetaan baru: pembacaan dilakukan oleh discovery itu sendiri
         // (leaf baru dibaca per subtree, path esensial setelah selesai).
         enqueueDiscovery(ctx, deviceId);
+        maybeProvisionCrCreds(ctx, deviceId);
         return applyPresetsSafe(deviceId, info.events);
       }
       if (!col.discovery_done) continueDiscovery(ctx, deviceId);
 
-      // Pembacaan parameter: esensial (info + semua varian redaman) ∪
-      // profil discovery. Dilakukan bila sudah jatuh tempo, atau bila
-      // perangkat baru boot / dipanggil operator (Connection Request) /
-      // melaporkan perubahan nilai — saat itulah data segar dibutuhkan.
-      const urgent = info.events.some((e) => /^(0|1|4|6) /.test(e));
-      const due = !col.next_collect_at || col.next_collect_at <= Date.now();
-      if (urgent || due) enqueueRead(ctx, deviceId, collectPaths(ctx, deviceId));
+      // Pembacaan dua tingkat — beban ONU minimal:
+      //  - PENUH (esensial ∪ profil): saat BOOT/BOOTSTRAP/VALUE CHANGE, atau
+      //    bila pembacaan penuh terakhir > ACS_FULL_COLLECT_HOURS;
+      //  - PANAS (redaman, status, IP, uptime, klien — ±1 GPV): saat jatuh
+      //    tempo biasa, atau saat Connection Request (maks. sekali/menit).
+      const now = Date.now();
+      const all = collectPaths(ctx, deviceId);
+      const boot = info.events.some((e) => /^(0|1|4) /.test(e));
+      const fullDue = !col.full_collect_at || now - col.full_collect_at > fullCollectMs;
+      const due = !col.next_collect_at || col.next_collect_at <= now;
+      const cr = info.events.some((e) => /^6 /.test(e))
+        && (!col.last_collect_at || now - col.last_collect_at > 60_000);
+      if (boot || (due && fullDue)) {
+        enqueueRead(ctx, deviceId, all);
+        db.markFullCollect(deviceId);
+      } else if (due || cr) {
+        enqueueRead(ctx, deviceId, hotPaths(all));
+      }
+      maybeProvisionCrCreds(ctx, deviceId);
     } catch (e) {
       db.addEvent(deviceId, 'collection_error',
         `Gagal menyiapkan pengumpulan: ${(e as Error).message}`);

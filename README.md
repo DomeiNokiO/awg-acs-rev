@@ -163,6 +163,8 @@ Pemecahan masalah:
 | `tr: write error: Broken pipe` lalu berhenti | Installer versi lama (pembuat password acak memicu SIGPIPE). Versi ini sudah diperbaiki |
 | `apt-get install gagal` dengan 404 di Debian 11 | Debian 11 EOL; pakai template Debian 12/13 |
 | ONU terdaftar tapi semua detail kosong | Sebelum revisi ini: ONU yang tidak mengirim cookie sesi (FiberHome dll.) tidak pernah menerima RPC. Update; untuk diagnosis set `ACS_CWMP_TRACE=1` di `/opt/acs/.env`, `systemctl restart acs`, lalu `journalctl -u acs -f` |
+| Tombol **Hubungi** gagal | Pesan kini menjelaskan penyebab: *kredensial ditolak* (isi "Akses ACS → CPE", atau tunggu ACS memasang kredensial otomatis setelah Inform) atau *ONU tidak terjangkau* (IP manajemen ONU tidak bisa dicapai dari server ACS — NAT/VLAN berbeda; perintah tetap terkirim saat Inform berikutnya) |
+| PPPoE menampilkan `ERROR_NO_ANSWER` | Itu `LastConnectionError` = riwayat putus terakhir, bukan status. Sejak revisi ini hanya ditampilkan bila koneksi tidak Connected, dengan arti (mis. "BRAS tidak menjawab — cek VLAN") |
 | Build UI `Killed` / exit 137 | Kehabisan RAM. Installer sudah memakai mode hemat; bila RAM < 768 MB, naikkan RAM/swap CT |
 | Layanan gagal `226/NAMESPACE` | Unit lama dengan sandbox; jalankan ulang installer (unit ditulis ulang) atau aktifkan *nesting* CT |
 
@@ -180,7 +182,10 @@ Variabel lingkungan (waktu jalankan server):
 | `ACS_API_TLS_CERT` / `ACS_API_TLS_KEY` | — | TLS untuk API/UI (:8080) |
 | `ACS_SESSION_TTL` | `8` (jam) | Masa berlaku sesi login |
 | `ACS_MAX_RPC_PER_SESSION` | `40` | Batas RPC per sesi CWMP (beban ONU). Sisa antrean dilanjutkan pada Inform berikutnya; `0` = tanpa batas |
-| `ACS_COLLECT_INTERVAL_MIN` | `30` | Interval pembacaan ulang parameter per ONU (menit, min. 5) |
+| `ACS_COLLECT_INTERVAL_MIN` | `30` | Interval pembacaan **leaf panas** per ONU (redaman, status, IP, uptime; menit, min. 5) |
+| `ACS_FULL_COLLECT_HOURS` | `6` | Interval pembacaan **profil penuh** (nama, VLAN, SSID, ServiceList…) |
+| `ACS_CR_AUTO` | `1` | Pasang kredensial Connection Request milik ACS di ONU yang password CR-nya tidak diketahui (agar tombol Hubungi bekerja). `0` = nonaktif |
+| `ACS_CR_USER` / `ACS_CR_PASS` | `acs` / acak | Kredensial CR yang dipasang; tanpa `ACS_CR_PASS` dibuat acak sekali dan disimpan di `data/cr.secret` |
 | `ACS_CWMP_TRACE` | `0` | `1` = catat alur RPC per ONU ke log (`journalctl -u acs`); `2` = juga isi SOAP (memuat kredensial — hanya untuk diagnosis) |
 | `ACS_BIND` | `0.0.0.0` | Bind address semua listener |
 
@@ -300,6 +305,24 @@ dan dicatat di log tugas; parameter barulah (mis.
 | Task konfigurasi `pending` selamanya saat ditolak | Fault tidak dipetakan ke task | Task ditutup `failed` + alasan |
 
 Detail per file: [CHANGELOG.md](CHANGELOG.md).
+
+## Beban ONU & ACS — kenapa ringan
+
+Dirancang supaya ribuan ONU bisa dikelola tanpa membebani CPU/RAM ONU yang kecil:
+
+| Mekanisme | Efek |
+|-----------|------|
+| Discovery terarah (`NextLevel=false` per subtree WAN/WiFi/DeviceInfo, bukan seluruh pohon) | Hanya leaf yang berguna disimpan & dibaca ulang (≤ 800 path, umumnya < 150) |
+| Koleksi dua tingkat | Inform rutin: **0 RPC** bila belum jatuh tempo; jatuh tempo: **1 GetParameterValues** leaf panas; profil penuh tiap `ACS_FULL_COLLECT_HOURS` / BOOT / Segarkan |
+| Batas `ACS_MAX_RPC_PER_SESSION` (40) | Pemetaan ONU baru terbagi ke 2–3 sesi, tidak ada sesi panjang yang membuat ONU timeout |
+| Prioritas antrean | Perintah operator dikirim lebih dulu dari bacaan rutin |
+| Debounce Connection Request | Satu CR per 10 detik per ONU; bacaan akibat CR maks. sekali per menit |
+| Kandidat redaman per keluarga vendor + `invalid_param` | Path yang terbukti tidak ada tidak pernah dikirim lagi |
+| Satu proses Node + SQLite | Tanpa MongoDB/Redis/proses terpisah — ±100 MB RAM |
+
+Terukur dengan simulator ONU (ZTE/Huawei/FiberHome/CMCC): pemetaan awal 42–50 RPC
+dalam 2 sesi, Inform periodik 0 RPC, siklus rutin 1 GPV, pembacaan penuh 2 GPV.
+Angka ONU nyata bergantung jumlah WAN/SSID-nya.
 
 ## Provisioning & Konfigurasi ONU
 

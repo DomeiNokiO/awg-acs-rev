@@ -8,6 +8,7 @@ import Shell from '@/components/Shell';
 import { api, type DeviceRow, type ParamRow, type EventRow, type DeviceInsight } from '@/lib/api';
 import { Configurator, wanLabel, type ConfigPreset } from '@/components/Configurator';
 import { rxLevel, RX_LABEL, fmtDbm, fmtUptime } from '@/lib/optical';
+import { connectionError } from '@/lib/wan';
 
 type Tab = 'summary' | 'config' | 'params' | 'commands' | 'discovered' | 'events' | 'tasks';
 
@@ -37,7 +38,9 @@ function DeviceBody() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('summary');
   const [filter, setFilter] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
+  // Notifikasi: hijau = berhasil, kuning = sebagian/peringatan, merah = gagal.
+  type ToastKind = 'ok' | 'warn' | 'err';
+  const [toast, setToast] = useState<{ msg: string; kind: ToastKind } | null>(null);
   const [editTarget, setEditTarget] = useState<{ path: string; value: string } | null>(null);
 
   const onEditParam = useCallback((path: string, value: string) => {
@@ -51,8 +54,8 @@ function DeviceBody() {
     setPreset({ ...p, nonce: Date.now() });
     setTab('config');
   }, []);
-  const flash = useCallback((m: string, ms = 5000) => {
-    setToast(m);
+  const flash = useCallback((msg: string, kind: ToastKind = 'ok', ms = kind === 'ok' ? 5000 : 9000) => {
+    setToast({ msg, kind });
     setTimeout(() => setToast(null), ms);
   }, []);
 
@@ -88,12 +91,10 @@ function DeviceBody() {
       if (crPass !== '') body.connection_request_pass = crPass;
       if (cwPass !== '') body.cwmp_pass = cwPass;
       await api(`/api/devices/${encodeURIComponent(id)}`, { method: 'PUT', body });
-      setToast('Metadata akses tersimpan');
-      setTimeout(() => setToast(null), 4000);
+      flash('Metadata akses tersimpan');
       void load();
     } catch (e) {
-      setToast(`Gagal menyimpan: ${(e as Error).message}`);
-      setTimeout(() => setToast(null), 5000);
+      flash(`Gagal menyimpan: ${(e as Error).message}`, 'err');
     } finally {
       setMetaBusy(false);
     }
@@ -113,15 +114,12 @@ function DeviceBody() {
     if (!id) return;
     setConnectBusy(true);
     try {
-      const r = await api<{ ok: boolean; status?: number }>(
+      const r = await api<{ ok: boolean; status?: number; auth?: string }>(
         `/api/devices/${encodeURIComponent(id)}/connect`, { method: 'POST' });
-      setToast(r.ok
-        ? `Connection Request terkirim (HTTP ${r.status ?? '-'}) — perangkat akan Inform.`
-        : 'Connection Request gagal dikirim.');
-      setTimeout(() => setToast(null), 6000);
+      flash(`Connection Request diterima ONU (HTTP ${r.status ?? '-'}, ${r.auth ?? '-'}) — ONU akan Inform dalam beberapa detik.`);
+      setTimeout(() => void load(), 6000);
     } catch (e) {
-      setToast(`Gagal hubungi: ${(e as Error).message}`);
-      setTimeout(() => setToast(null), 6000);
+      flash(`Gagal hubungi: ${(e as Error).message}`, 'err');
     } finally {
       setConnectBusy(false);
     }
@@ -133,17 +131,16 @@ function DeviceBody() {
     setConnectBusy(true);
     try {
       const r = await api<{ paths: number }>(`/api/devices/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
-      let note = `${r.paths} parameter diantrekan untuk dibaca.`;
+      const note = `${r.paths} parameter diantrekan untuk dibaca.`;
       try {
         await api(`/api/devices/${encodeURIComponent(id)}/connect`, { method: 'POST' });
-        note += ' Connection Request terkirim — data diperbarui dalam beberapa detik.';
+        flash(`${note} Connection Request diterima — data diperbarui dalam beberapa detik.`);
         setTimeout(() => void load(), 6000);
-      } catch {
-        note += ' Connection Request gagal; data dibaca saat Inform berikutnya.';
+      } catch (e) {
+        flash(`${note} Data dibaca saat Inform berikutnya. ${(e as Error).message}`, 'warn');
       }
-      flash(note, 7000);
     } catch (e) {
-      flash(`Gagal menyegarkan: ${(e as Error).message}`);
+      flash(`Gagal menyegarkan: ${(e as Error).message}`, 'err');
     } finally {
       setConnectBusy(false);
     }
@@ -155,7 +152,7 @@ function DeviceBody() {
       await api(`/api/devices/${encodeURIComponent(id)}/discover`, { method: 'POST' });
       flash('Pemetaan struktur ulang diantrekan — berjalan saat Inform berikutnya.');
     } catch (e) {
-      flash(`Gagal: ${(e as Error).message}`);
+      flash(`Gagal: ${(e as Error).message}`, 'err');
     }
   };
 
@@ -167,7 +164,7 @@ function DeviceBody() {
       flash('Penghapusan WAN diantrekan.');
       void load();
     } catch (e) {
-      flash(`Gagal: ${(e as Error).message}`);
+      flash(`Gagal: ${(e as Error).message}`, 'err');
     }
   };
 
@@ -179,7 +176,7 @@ function DeviceBody() {
       flash(`${enable ? 'Aktifkan' : 'Nonaktifkan'} WAN diantrekan.`);
       void load();
     } catch (e) {
-      flash(`Gagal: ${(e as Error).message}`);
+      flash(`Gagal: ${(e as Error).message}`, 'err');
     }
   };
 
@@ -229,8 +226,10 @@ function DeviceBody() {
       </div>
 
       {toast && (
-        <div className="alert alert-success d-flex align-items-center gap-2 mb-3" role="alert">
-          <i className="fa-solid fa-circle-check" />{toast}
+        <div className={`alert ${toast.kind === 'ok' ? 'alert-success' : toast.kind === 'warn' ? 'alert-warning' : 'alert-danger'} d-flex align-items-start gap-2 mb-3`} role="alert">
+          <i className={`fa-solid mt-1 ${toast.kind === 'ok' ? 'fa-circle-check' : toast.kind === 'warn' ? 'fa-triangle-exclamation' : 'fa-circle-xmark'}`} />
+          <div className="flex-grow-1">{toast.msg}</div>
+          <button type="button" className="btn-close" aria-label="Tutup" onClick={() => setToast(null)} />
         </div>
       )}
 
@@ -723,8 +722,13 @@ function SummaryPanel({ insight, onEdit, onDeleteWan, onToggleWan }: {
                     </div>
                   </td>
                   <td className="small font-monospace">{c.username || '—'}</td>
-                  <td>{statusBadge(c.status)}{c.lastError && c.lastError !== 'ERROR_NONE' && c.lastError !== 'NONE'
-                    ? <div className="small text-danger">{c.lastError}</div> : null}</td>
+                  <td>
+                    {statusBadge(c.status)}
+                    {(() => {
+                      const err = connectionError(c.status, c.lastError);
+                      return err && <div className="small text-danger" title={err.code}>{err.text}</div>;
+                    })()}
+                  </td>
                   <td className="small font-monospace">{c.externalIp || '—'}</td>
                   <td className="small">
                     <div className="num">{c.vlan && c.vlan !== '0' ? c.vlan : '—'}</div>

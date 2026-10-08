@@ -55,8 +55,13 @@ Inform ──► simpan nilai ParameterList Inform (IP WAN, CR URL, versi SW)
    │        └─ GPV leaf baru di sesi yang sama
    │      root habis ─► GPV path esensial (redaman di luar WANDevice dsb.)
    │
-   └─ sudah dipetakan ─► bila jatuh tempo atau event 0/1/4/6:
-          GPV (esensial ∪ profil), batch 24, split-on-fault
+   └─ sudah dipetakan ─►
+          BOOT/BOOTSTRAP/VALUE CHANGE, atau profil penuh > ACS_FULL_COLLECT_HOURS
+              → GPV PENUH (esensial ∪ profil), batch 24, split-on-fault
+          jatuh tempo (ACS_COLLECT_INTERVAL_MIN) atau CONNECTION REQUEST (maks. 1×/menit)
+              → GPV PANAS: redaman, ConnectionStatus, ExternalIPAddress,
+                LastConnectionError, UpTime, TotalAssociations, HostNumberOfEntries
+          selain itu → 0 RPC (sesi langsung diakhiri 204)
 ```
 
 Setiap balasan GPV/Inform memperbarui **kolom ringkasan** perangkat
@@ -261,6 +266,18 @@ GPN WANDevice.  → WAN baru muncul di UI
   melaporkan tipenya.
 - TR-181: hanya `existing` untuk `PPP.Interface` (username/password/VLAN);
   WAN baru belum didukung.
+
+### Connection Request (tombol Hubungi)
+
+- GET ke `ConnectionRequestURL` tanpa kredensial → bila 401, ulang dengan
+  **Digest** (bila ditawarkan) atau Basic. 2xx/500/503 = diterima.
+- Kredensial: yang diisi operator di "Akses ACS → CPE", atau kredensial ACS yang
+  dipasang otomatis (`ACS_CR_AUTO`, `ACS_CR_USER`, `ACS_CR_PASS` / `data/cr.secret`)
+  pada ONU yang password CR-nya tidak diketahui — password CR tidak bisa dibaca
+  lewat TR-069.
+- URL mengikuti laporan ONU terbaru kecuali diisi manual.
+- ONU di balik NAT / VLAN manajemen yang tak terjangkau server ACS tidak bisa
+  dipanggil; perintah tetap terkirim saat Inform periodik berikutnya.
 
 ### Perintah perangkat & beban ONU
 

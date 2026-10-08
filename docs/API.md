@@ -131,9 +131,9 @@ Semua membutuhkan autentikasi kecuali `/api/health` dan `/api/login`.
 | POST | `/api/devices/:id/refresh` | antrekan baca ulang (path esensial + profil discovery); susulkan `/connect` agar segera Inform |
 | POST | `/api/devices/:id/config` | konfigurasi terstruktur, lihat tabel di bawah |
 | PUT | `/api/devices/:id` | **admin** — ubah `connection_request_url/user/pass`, `cwmp_user/pass`, `group_name`, `notes` |
-| POST | `/api/devices/:id/connect` | kirim Connection Request (ACS → CPE) pakai URL+Basic Auth tersimpan |
+| POST | `/api/devices/:id/connect` | kirim Connection Request (ACS → CPE), Digest/Basic. 200 `{ok,status,auth}`; 409 belum ada URL; 429 terlalu cepat (≤ 1×/10 dtk); 502 `{error,reason:'auth'|'unreachable'|'http'}` |
 | POST | `/api/devices/:id/read` | `{paths:[...]}` — GET Value RPC (partial path berakhiran `.` diizinkan) |
-| POST | `/api/devices/:id/write` | `{values:{path: nilai}}` — SET Value RPC |
+| POST | `/api/devices/:id/write` | `{values:{path: nilai}}` (tipe dari laporan ONU) atau `{params:[{name,type,value}]}` — SET Value RPC |
 | POST | `/api/devices/:id/reboot` | antrekan reboot |
 | POST | `/api/devices/:id/factory-reset` | **admin**, body `{"confirm":"<serial number>"}` — antrekan reset pabrik |
 | POST | `/api/devices/:id/discover` | petakan struktur parameter perangkat |
@@ -251,6 +251,7 @@ curl -s -b /tmp/acs.jar -X POST "$ACS/api/catalog/compare" \
 | GET | `/api/events` | `?limit=&kind=` — log perangkat & sistem |
 | GET | `/api/users` | daftar pengguna (role `admin`) |
 | POST | `/api/users` | `{username, password, role}` (role `admin`) |
+| DELETE | `/api/users/:username` | hapus pengguna (role `admin`; bukan diri sendiri, bukan admin terakhir) |
 
 ### Webhook (push)
 

@@ -44,7 +44,10 @@ export async function api<T = unknown>(
   const headers: Record<string, string> = { Accept: 'application/json' };
 
   if (method !== 'GET' && method !== 'HEAD') {
-    headers['Content-Type'] = 'application/json';
+    // Content-Type JSON hanya bila memang ada body: Fastify menolak
+    // "application/json" dengan body kosong (400 FST_ERR_CTP_EMPTY_JSON_BODY)
+    // — penyebab "Bad Request" pada tombol Hubungi/Pelajari struktur/Reboot.
+    if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     const c = await getCsrf();
     if (c) headers['x-csrf'] = c;
   }
@@ -72,7 +75,11 @@ export async function api<T = unknown>(
   }
 
   if (!res.ok) {
-    const msg = (data as { error?: string } | null)?.error ?? `HTTP ${res.status}`;
+    const d = data as { error?: string; message?: string; detail?: string } | null;
+    // Pesan paling informatif dulu: Fastify menaruh alasan di `message`,
+    // sedangkan `error` sering hanya "Bad Request".
+    const generic = !d?.error || /^(Bad Request|Internal Server Error|Not Found)$/.test(d.error);
+    const msg = (generic ? d?.message : undefined) ?? d?.error ?? `HTTP ${res.status}`;
     throw new ApiError(res.status, msg);
   }
   return data as T;

@@ -12,6 +12,47 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0d. Tombol aksi "Bad Request", Connection Request Digest, koleksi dua tingkat
+
+**"Bad Request" di tombol aksi** (Hubungi, Pelajari struktur, Segarkan, Reboot,
+terapkan/hapus Preset, test/hapus Webhook, hapus pengguna):
+- Akar masalah: UI selalu mengirim `Content-Type: application/json` walau
+  tanpa body → Fastify menolak (`FST_ERR_CTP_EMPTY_JSON_BODY`). Diperbaiki di
+  UI (header hanya bila ada body) **dan** server (body JSON kosong = `{}`).
+- Error kini membawa alasan nyata (bukan "Bad Request"); JSON rusak → "Body JSON tidak valid".
+- **Tulis Parameter** (tab Perintah) selalu 400: UI mengirim `{values}`, server
+  hanya menerima `{params}` — kini keduanya; tipe diambil dari laporan ONU.
+- **Hapus pengguna** selalu 404: route `DELETE /api/users/:username` belum
+  ada — ditambahkan (admin, bukan diri sendiri, bukan admin terakhir).
+- Task tulis manual / AddObject / DeleteObject kini ditutup oleh jawaban ONU.
+- Audit otomatis: 38 pemanggilan API di UI dicocokkan dengan route server — semua ada.
+
+**Notifikasi**: hijau = berhasil, kuning = sebagian (mis. data diantrekan
+tetapi ONU tak terjangkau), merah = gagal; bisa ditutup. Uji webhook gagal → merah.
+
+**Connection Request (tombol Hubungi)** — `apps/server/src/connreq.ts` (baru):
+- HTTP **Digest** (RFC 2617, MD5/MD5-sess, qop=auth) — sebelumnya hanya Basic,
+  padahal ZTE/Huawei/FiberHome mewajibkan Digest → selalu 401. Diuji dengan
+  contoh resmi RFC 2617.
+- `node:http(s)` menggantikan `fetch` (fetch menolak sebagian port: "bad port").
+- Satu CR per 10 detik per ONU (429 + sisa waktu).
+- Pesan penyebab: kredensial ditolak vs ONU tak terjangkau (NAT/VLAN) vs HTTP lain.
+- **Kredensial CR otomatis** (`ACS_CR_AUTO`, default aktif): ONU yang password
+  CR-nya tidak diketahui ACS dipasangi `ConnectionRequestUsername/Password`
+  milik ACS (satu SPV, sekali; ulang paling cepat 7 hari bila ditolak);
+  tersimpan saat ONU menerima. Tidak dilakukan bila operator mengisi sendiri.
+- URL CR mengikuti laporan ONU terbaru (sebelumnya hanya diisi sekali dan
+  basi saat IP manajemen berubah), kecuali diisi manual.
+
+**PPPoE `ERROR_NO_ANSWER`**: `LastConnectionError` adalah riwayat; kini hanya
+ditampilkan bila koneksi tidak Connected, dengan arti dalam bahasa Indonesia.
+
+**Koleksi dua tingkat (beban ONU)**: siklus rutin hanya membaca leaf panas
+(redaman, status, IP, uptime, jumlah klien — umumnya 1 GPV); profil penuh tiap
+`ACS_FULL_COLLECT_HOURS` (6), saat BOOT/BOOTSTRAP/VALUE CHANGE, atau Segarkan.
+Bacaan akibat Connection Request maks. sekali per menit. Terukur: Inform
+periodik 0 RPC, rutin 1 GPV.
+
 ## 0c. `deploy/update.sh` — update aman di CT
 
 - Update ke commit terbaru tanpa install ulang: `npm ci` dan build UI hanya

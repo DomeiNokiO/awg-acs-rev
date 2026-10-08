@@ -28,6 +28,7 @@ import { validateCatalog } from './catalog-schema.ts';
 import { validatePreset, applyPresets, type PresetCondition, type PresetAction } from './presets.ts';
 import { applyConfig, CONFIG_TYPES, type ConfigRequest } from './configure.ts';
 import { buildInsight } from './insight.ts';
+import { sendConnectionRequest, crCooldown, markCr } from './connreq.ts';
 import { WebhookDispatcher, type DeliveryLogEntry } from './webhooks.ts';
 import type { WebhookRow } from '@acs/core';
 
@@ -61,6 +62,32 @@ export function registerApiRoutes(
   app: FastifyInstance, db: Database, ctx: CwmpContext,
   dispatcher?: WebhookDispatcher,
 ): void {
+  // Error tak tertangani: kirim alasan yang bisa dibaca operator di `error`
+  // (bawaan Fastify hanya "Bad Request"/"Internal Server Error").
+  app.setErrorHandler((err: unknown, req, reply) => {
+    const e = err as { statusCode?: number; message?: string };
+    const code = e.statusCode ?? 500;
+    if (code >= 500) req.log.error(err);
+    const msg = e.message ?? 'error';
+    reply.code(code).send({ error: code >= 500 ? `Kesalahan server: ${msg}` : msg });
+  });
+
+  // JSON dengan body kosong dianggap {} — banyak klien (termasuk UI lama
+  // dan skrip curl) mengirim Content-Type JSON pada POST tanpa body.
+  // Parser bawaan Fastify menolaknya dengan 400 "Bad Request".
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 10 * 1024 * 1024 }, (_req, body, done) => {
+    const text = typeof body === 'string' ? body.trim() : '';
+    if (!text) { done(null, {}); return; }
+    try {
+      done(null, JSON.parse(text));
+    } catch {
+      const err = new Error('Body JSON tidak valid') as Error & { statusCode?: number };
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  });
+
   /* ---------------- auth plumbing ---------------- */
 
   // Emit ke webhook bila dispatcher dipasang. Dipanggil dari jalur hot
@@ -243,12 +270,16 @@ function maskDevice<T extends {
       const u = b.connection_request_url.trim().slice(0, 2048);
       if (u && !/^https?:\/\//i.test(u)) return reply.code(400).send({ error: 'invalid_url' });
       fields.connection_request_url = u || null;
+      // URL diisi manual → jangan ditimpa nilai yang dilaporkan ONU.
+      if ((u || null) !== d.connection_request_url) fields.cr_manual = u ? 1 : 0;
     }
     if (typeof b.connection_request_user === 'string') {
       fields.connection_request_user = b.connection_request_user.trim().slice(0, 128) || null;
     }
-    if (typeof b.connection_request_pass === 'string') {
-      fields.connection_request_pass = b.connection_request_pass.trim().slice(0, 128) || null;
+    if (typeof b.connection_request_pass === 'string' && b.connection_request_pass.trim()) {
+      fields.connection_request_pass = b.connection_request_pass.trim().slice(0, 128);
+      // Kredensial dari operator: hentikan pemasangan kredensial otomatis.
+      fields.cr_manual = 1;
     }
     // Grup & catatan
     if (typeof b.group_name === 'string') fields.group_name = b.group_name.trim().slice(0, 64) || null;
@@ -270,39 +301,28 @@ function maskDevice<T extends {
     const d = db.getDevice(id);
     if (!d) return reply.code(404).send({ error: 'device_not_found' });
     const url = d.connection_request_url;
-    if (!url) return reply.code(400).send({ error: 'no_connection_request_url' });
-
-    const user = d.connection_request_user ?? '';
-    const pass = d.connection_request_pass ?? '';
-
-    // RPC pasif: cukup GET dengan Basic Auth — TR-069 standar.
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 8000);
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
-        },
-        signal: ctrl.signal,
-      });
-      clearTimeout(t);
-      // 200/204 = CPE menerima dan akan Inform; 401/403 = kredensial salah.
-      if (res.status === 401 || res.status === 403) {
-        db.addEvent(id, 'connect_failed', 'Connection Request ditolak CPE (401/403) — cek user/password');
-        return reply.code(502).send({ error: 'authentication_failed', status: res.status });
-      }
-      if (!res.ok && res.status !== 500 && res.status !== 503) {
-        // 500/503 sering respons "laporan" CPE yang sudah menerima; anggap sukses.
-        db.addEvent(id, 'connect_failed', `Connection Request HTTP ${res.status}`);
-        return reply.code(502).send({ error: 'connection_request_failed', status: res.status });
-      }
-      db.addEvent(id, 'connect', 'Connection Request terkirim — perangkat akan Inform');
-      return reply.send({ ok: true, status: res.status });
-    } catch (e) {
-      db.addEvent(id, 'connect_failed', `Connection Request gagal: ${e instanceof Error ? e.message : 'error'}`);
-      return reply.code(502).send({ error: 'connection_request_failed', detail: e instanceof Error ? e.message : 'error' });
+    if (!url) {
+      return reply.code(409).send({ error: 'ONU belum melaporkan ConnectionRequestURL — tunggu Inform berikutnya, perintah tetap terkirim saat itu' });
     }
+    // Lindungi ONU dari klik beruntun: satu Connection Request per 10 detik.
+    const wait = crCooldown(id);
+    if (wait > 0) {
+      return reply.code(429).send({ error: `ONU baru saja dipanggil — tunggu ${Math.ceil(wait / 1000)} detik` });
+    }
+    markCr(id);
+    const r = await sendConnectionRequest(url, d.connection_request_user ?? '', d.connection_request_pass ?? '');
+    if (r.ok) {
+      db.addEvent(id, 'connect', `Connection Request diterima ONU (HTTP ${r.status}, auth ${r.auth}) — ONU akan Inform`);
+      return reply.send({ ok: true, status: r.status, auth: r.auth });
+    }
+    const host = (() => { try { return new URL(url).host; } catch { return url; } })();
+    const msg = r.reason === 'auth'
+      ? `ONU menolak kredensial Connection Request (HTTP ${r.status}, ${r.auth}). Isi user/password di "Akses ACS → CPE", atau biarkan ACS memasang kredensial otomatis (ACS_CR_AUTO).`
+      : r.reason === 'unreachable'
+        ? `ONU tidak terjangkau di ${host} (${r.detail}). Biasanya IP manajemen ONU tidak bisa dicapai dari server ACS (NAT/VLAN berbeda). Perintah tetap dikirim saat Inform berikutnya.`
+        : `ONU membalas HTTP ${r.status} untuk Connection Request`;
+    db.addEvent(id, 'connect_failed', msg);
+    return reply.code(502).send({ error: msg, reason: r.reason, status: r.status });
   });
 
   app.post('/api/devices/:id/read', async (req, reply) => {
@@ -326,9 +346,22 @@ function maskDevice<T extends {
   app.post('/api/devices/:id/write', async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!db.getDevice(id)) return reply.code(404).send({ error: 'device_not_found' });
-    const body = (req.body ?? {}) as { params?: unknown };
+    const body = (req.body ?? {}) as { params?: unknown; values?: unknown };
+    // Dua format: { params: [{name,type,value}] } atau { values: {path: nilai} }
+    // (dipakai tab Perintah). Untuk `values`, tipe diambil dari tipe yang
+    // dilaporkan ONU saat dibaca — tipe salah membuat SPV ditolak 9006.
+    if (!Array.isArray(body.params) && body.values && typeof body.values === 'object') {
+      const known = new Map(db.getParams(id).map((p) => [p.path, p.type]));
+      body.params = Object.entries(body.values as Record<string, unknown>).map(([name, value]) => {
+        const v = String(value ?? '');
+        const t = known.get(name);
+        const type = t && t !== 'xsd:string' ? t
+          : /\.(?:Enable|[A-Za-z]+Enabled?)$/.test(name) && /^(true|false|0|1)$/i.test(v) ? 'xsd:boolean' : 'xsd:string';
+        return { name, type, value: type === 'xsd:boolean' ? v.toLowerCase() : v };
+      });
+    }
     if (!Array.isArray(body.params) || !body.params.length) {
-      return reply.code(400).send({ error: 'params_required' });
+      return reply.code(400).send({ error: 'Isi minimal satu baris "Path = nilai"' });
     }
     if (body.params.length > 100) return reply.code(400).send({ error: 'too_many_params', max: 100 });
 
@@ -349,8 +382,10 @@ function maskDevice<T extends {
       }
       params.push({ name: p.name, type: type as 'xsd:string', value: String(p.value ?? '') });
     }
-    const key = enqueueWrite(ctx, id, params);
-    db.createTask(key, id, 'write', { params });
+    // Kunci task = ParameterKey → jawaban/Fault ONU menutup task ini.
+    const key = `w_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    db.createTask(key, id, 'write', { params, label: `Tulis ${params.length} parameter` }, 24 * 60 * 60 * 1000);
+    enqueueWrite(ctx, id, params, key);
     return reply.send({ task: key, queued: ctx.queue.size(id) });
   });
 
@@ -403,6 +438,7 @@ function maskDevice<T extends {
     if (!db.getDevice(id)) return reply.code(404).send({ error: 'device_not_found' });
     const paths = collectPaths(ctx, id);
     enqueueRead(ctx, id, paths);
+    db.markFullCollect(id);
     const col = db.getCollection(id);
     if (!col || (col.profile_version ?? 0) < PROFILE_VERSION) enqueueDiscover(ctx, id);
     return reply.send({ ok: true, paths: paths.length, queued: ctx.queue.size(id) });
@@ -432,8 +468,9 @@ function maskDevice<T extends {
     if (!objectName) return reply.code(400).send({ error: 'object_name_required' });
     if (!/^[\w\.\-:]{1,512}$/.test(objectName)) return reply.code(400).send({ error: 'invalid_object_name' });
     const parameterKey = typeof body.parameterKey === 'string' ? body.parameterKey.slice(0, 128) : '';
-    const key = enqueueAddObject(ctx, id, objectName, parameterKey);
-    db.createTask(key, id, 'add_object', { objectName, parameterKey });
+    const key = parameterKey || `ao_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    db.createTask(key, id, 'add_object', { objectName, parameterKey: key }, 24 * 60 * 60 * 1000);
+    enqueueAddObject(ctx, id, objectName, key);
     db.addEvent(id, 'task', 'AddObject diantrekan');
     emitWebhook('task', `AddObject diantrekan untuk ${id}`, { deviceId: id, action: 'add_object', objectName });
     return reply.send({ task: key, queued: ctx.queue.size(id) });
@@ -479,8 +516,9 @@ function maskDevice<T extends {
     if (!objectName) return reply.code(400).send({ error: 'object_name_required' });
     if (!/^[\w\.\-:]{1,512}$/.test(objectName)) return reply.code(400).send({ error: 'invalid_object_name' });
     const parameterKey = typeof body.parameterKey === 'string' ? body.parameterKey.slice(0, 128) : '';
-    const key = enqueueDeleteObject(ctx, id, objectName, parameterKey);
-    db.createTask(key, id, 'delete_object', { objectName, parameterKey });
+    const key = parameterKey || `do_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    db.createTask(key, id, 'delete_object', { objectName, parameterKey: key }, 24 * 60 * 60 * 1000);
+    enqueueDeleteObject(ctx, id, objectName, key);
     db.addEvent(id, 'task', 'DeleteObject diantrekan');
     emitWebhook('task', `DeleteObject diantrekan untuk ${id}`, { deviceId: id, action: 'delete_object', objectName });
     return reply.send({ task: key, queued: ctx.queue.size(id) });
@@ -1030,5 +1068,25 @@ function maskDevice<T extends {
     if (req.authUser?.role !== 'admin') return reply.code(403).send({ error: 'admin_required' });
     const rows = db.db.prepare('SELECT username, role, created_at, last_login_at FROM users ORDER BY username').all();
     return reply.send({ items: rows });
+  });
+
+  // Hapus pengguna (dipakai halaman Setelan; sebelumnya route ini tidak ada
+  // sehingga tombol hapus selalu 404).
+  app.delete('/api/users/:username', async (req, reply) => {
+    if (req.authUser?.role !== 'admin') return reply.code(403).send({ error: 'admin_required' });
+    const { username } = req.params as { username: string };
+    if (username === req.authUser.username) {
+      return reply.code(400).send({ error: 'Tidak bisa menghapus akun yang sedang dipakai' });
+    }
+    const u = db.getUser(username);
+    if (!u) return reply.code(404).send({ error: 'Pengguna tidak ditemukan' });
+    if (u.role === 'admin') {
+      const admins = (db.db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get() as { n: number }).n;
+      if (admins <= 1) return reply.code(400).send({ error: 'Admin terakhir tidak bisa dihapus' });
+    }
+    db.db.prepare('DELETE FROM sessions WHERE username = ?').run(username);
+    db.db.prepare('DELETE FROM users WHERE username = ?').run(username);
+    db.addEvent(null, 'user', `Pengguna ${username} dihapus oleh ${req.authUser.username}`);
+    return reply.send({ ok: true });
   });
 }

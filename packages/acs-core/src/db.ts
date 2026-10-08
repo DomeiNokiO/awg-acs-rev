@@ -42,6 +42,10 @@ export interface DeviceRow {
   wan_ip: string | null;
   ssid: string | null;
   summary_at: number | null;
+  /** 1 = URL/kredensial Connection Request diisi operator (jangan ditimpa). */
+  cr_manual: number | null;
+  /** Terakhir kali ACS mencoba memasang kredensial Connection Request. */
+  cr_provisioned_at: number | null;
 }
 
 export interface ParamRow {
@@ -83,6 +87,7 @@ export interface CollectionRow {
   interval_min: number;
   last_error: string | null;
   profile_version: number;       // versi format profil (lihat cwmp.ts PROFILE_VERSION)
+  full_collect_at: number | null; // pembacaan profil penuh terakhir (lihat index.ts)
 }
 
 export interface WebhookRow {
@@ -332,6 +337,7 @@ export class Database {
       ['data_model', 'TEXT'], ['rx_power', 'REAL'], ['tx_power', 'REAL'],
       ['optical_temp', 'REAL'], ['pppoe_user', 'TEXT'], ['pppoe_status', 'TEXT'],
       ['wan_ip', 'TEXT'], ['ssid', 'TEXT'], ['summary_at', 'INTEGER'],
+      ['cr_manual', 'INTEGER'], ['cr_provisioned_at', 'INTEGER'],
     ] as const;
     for (const [name, type] of added) {
       if (!cols.includes(name)) this.db.exec(`ALTER TABLE devices ADD COLUMN ${name} ${type}`);
@@ -339,6 +345,9 @@ export class Database {
     const ccols = (this.db.prepare('PRAGMA table_info(collection)').all() as { name: string }[]).map((c) => c.name);
     if (!ccols.includes('profile_version')) {
       this.db.exec('ALTER TABLE collection ADD COLUMN profile_version INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!ccols.includes('full_collect_at')) {
+      this.db.exec('ALTER TABLE collection ADD COLUMN full_collect_at INTEGER');
     }
   }
 
@@ -738,6 +747,10 @@ export class Database {
           last_collect_at = excluded.last_collect_at, next_collect_at = excluded.next_collect_at
       `).run(deviceId, now, now + Math.max(intervalMin, 5) * 60 * 1000, intervalMin);
     }
+  }
+
+  markFullCollect(deviceId: string): void {
+    this.db.prepare('UPDATE collection SET full_collect_at = ? WHERE device_id = ?').run(Date.now(), deviceId);
   }
 
   markCollectError(deviceId: string, error: string): void {

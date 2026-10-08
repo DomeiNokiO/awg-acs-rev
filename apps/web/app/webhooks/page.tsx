@@ -135,7 +135,8 @@ function WebhooksBody() {
     setErr(''); setMsg('');
     try {
       const r = await api<{ entry: DeliveryEntry }>(`/api/webhooks/${id}/test`, { method: 'POST' });
-      setMsg(r.entry.ok ? `Uji OK — HTTP ${r.entry.status} (${r.entry.ms} ms)` : `Uji gagal — ${r.entry.status ?? r.entry.error}`);
+      if (r.entry.ok) setMsg(`Uji OK — HTTP ${r.entry.status} (${r.entry.ms} ms)`);
+      else setErr(`Uji gagal — ${r.entry.status ?? r.entry.error}`);
       await loadLog();
     } catch (err2) {
       setErr(err2 instanceof Error ? err2.message : 'uji gagal');

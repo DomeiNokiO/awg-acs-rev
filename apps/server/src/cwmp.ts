@@ -72,6 +72,8 @@ export interface CwmpContext {
   onCollected?: (deviceId: string, params: number) => void;
   /** Interval (menit) pengumpulan ulang; default 30. */
   collectIntervalMin?: number;
+  /** Kredensial Connection Request yang dipasang ACS (null = nonaktif). */
+  crCreds?: { user: string; pass: string } | null;
 }
 
 function deviceIdOf(identity: DeviceIdentity): string {
@@ -337,15 +339,17 @@ function applyValues(
   if (dm) fields['data_model'] = dm;
   if (Object.keys(fields).length) ctx.db.setDeviceFields(deviceId, fields);
 
-  // Kredensial Connection Request yang dilaporkan perangkat melengkapi
-  // (bukan menimpa) nilai yang sudah diisi operator di UI.
+  // URL Connection Request mengikuti laporan ONU terbaru (IP manajemen
+  // ONU bisa berubah setelah reboot/DHCP) — kecuali operator mengisinya
+  // manual (cr_manual). Username melengkapi bila belum ada.
   const crUrl = values['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
     ?? values['Device.ManagementServer.ConnectionRequestURL'];
   const crUser = values['InternetGatewayDevice.ManagementServer.ConnectionRequestUsername']
     ?? values['Device.ManagementServer.ConnectionRequestUsername'];
   const existing = ctx.db.getDevice(deviceId);
   const patch: Record<string, string> = {};
-  if (crUrl && /^https?:\/\//i.test(crUrl.trim()) && !existing?.connection_request_url) {
+  if (crUrl && /^https?:\/\//i.test(crUrl.trim()) && !existing?.cr_manual
+    && crUrl.trim() !== existing?.connection_request_url) {
     patch['connection_request_url'] = crUrl.trim();
   }
   if (crUser && !existing?.connection_request_user) patch['connection_request_user'] = crUser.trim();
@@ -377,6 +381,20 @@ function deviceEssentials(ctx: CwmpContext, deviceId: string): string[] {
   return essentialPaths(deviceModel(ctx, deviceId), opticalCandidates(fam, invalid));
 }
 
+/**
+ * Leaf "panas": yang benar-benar berubah dari waktu ke waktu (redaman,
+ * status koneksi, IP, uptime, jumlah klien). Siklus koleksi rutin hanya
+ * membaca ini — biasanya 1 GetParameterValues — sedangkan profil penuh
+ * (nama, VLAN, SSID, ServiceList…) dibaca berkala jarang / saat BOOT /
+ * saat diminta operator. Inilah yang membuat beban per ONU jauh lebih
+ * kecil dari penyegaran penuh.
+ */
+const HOT_LEAF = /(?:RXPower|RxPower|TXPower|TxPower|OpticalSignalLevel|TransmitOpticalLevel|Temperature|TemperatureSensor\.\d+\.Value|ConnectionStatus|ExternalIPAddress|LastConnectionError|\.UpTime|\.Uptime|TotalAssociations|HostNumberOfEntries|AssociatedDeviceNumberOfEntries|Optical\.Interface\.\d+\.Status|PPP\.Interface\.\d+\.Status)$/;
+
+export function hotPaths(paths: string[]): string[] {
+  return paths.filter((p) => HOT_LEAF.test(p));
+}
+
 /** Path yang dibaca tiap siklus koleksi: esensial ∪ profil discovery. */
 export function collectPaths(ctx: CwmpContext, deviceId: string): string[] {
   return [...new Set([...deviceEssentials(ctx, deviceId), ...currentProfile(ctx, deviceId)])];
@@ -405,6 +423,31 @@ function toParams(prefix: string, fills: Fill[]): ParamValue[] {
     type: (f.type as ParamValue['type']) ?? 'xsd:string',
     value: String(f.value),
   }));
+}
+
+/**
+ * Pasang kredensial Connection Request milik ACS pada ONU yang password
+ * CR-nya tidak diketahui ACS (password tidak bisa dibaca lewat TR-069),
+ * supaya tombol Hubungi bekerja. Sekali per perangkat; dicoba lagi paling
+ * cepat 7 hari bila ditolak. Tidak dilakukan bila operator mengisi
+ * kredensial sendiri (cr_manual) atau ACS_CR_AUTO=0.
+ */
+export function maybeProvisionCrCreds(ctx: CwmpContext, deviceId: string): void {
+  const cr = ctx.crCreds;
+  if (!cr) return;
+  const row = ctx.db.getDevice(deviceId);
+  if (!row || row.cr_manual || row.connection_request_pass) return;
+  if (row.cr_provisioned_at && Date.now() - row.cr_provisioned_at < 7 * 24 * 3600 * 1000) return;
+  const root = deviceModel(ctx, deviceId) === 'TR-181' ? 'Device.' : 'InternetGatewayDevice.';
+  ctx.db.setDeviceFields(deviceId, { cr_provisioned_at: Date.now() });
+  const params: ParamValue[] = [
+    { name: `${root}ManagementServer.ConnectionRequestUsername`, type: 'xsd:string', value: cr.user },
+    { name: `${root}ManagementServer.ConnectionRequestPassword`, type: 'xsd:string', value: cr.pass },
+  ];
+  const key = `cfg_cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  ctx.db.createTask(key, deviceId, 'write',
+    { params, label: 'Kredensial Connection Request ACS', crCreds: { user: cr.user, pass: cr.pass } }, WRITE_TTL_MS);
+  enqueueWrite(ctx, deviceId, params, key);
 }
 
 /* ------------------------------------------------------------------ *
@@ -526,6 +569,13 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
           .filter((n) => n && !/Password|KeyPassphrase|PreSharedKey/i.test(n));
         if (back.length) enqueueRead(ctx, deviceId, back);
         if (payload.rediscover === true) rediscoverWan(ctx, deviceId);
+        // Kredensial Connection Request terpasang di ONU → simpan supaya
+        // tombol Hubungi bisa mengautentikasi (Digest).
+        const cr = payload.crCreds as { user?: unknown; pass?: unknown } | undefined;
+        if (cr && typeof cr.user === 'string' && typeof cr.pass === 'string') {
+          ctx.db.setDeviceFields(deviceId, { connection_request_user: cr.user, connection_request_pass: cr.pass });
+          ctx.db.addEvent(deviceId, 'cwmp', 'Kredensial Connection Request ACS terpasang di ONU');
+        }
       }
       break;
     }
