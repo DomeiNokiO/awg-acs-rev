@@ -171,6 +171,18 @@ function DeviceBody() {
     }
   };
 
+  const toggleWan = async (base: string, enable: boolean, label: string) => {
+    if (!id) return;
+    if (!enable && !window.confirm(`Nonaktifkan koneksi WAN ini?\n\n${label}\n\nPelanggan terputus bila ini koneksi internet aktif.`)) return;
+    try {
+      await api(`/api/devices/${encodeURIComponent(id)}/config`, { method: 'POST', body: { type: 'wan-enable', target: base, enable } });
+      flash(`${enable ? 'Aktifkan' : 'Nonaktifkan'} WAN diantrekan.`);
+      void load();
+    } catch (e) {
+      flash(`Gagal: ${(e as Error).message}`);
+    }
+  };
+
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -362,11 +374,11 @@ function DeviceBody() {
 
             <div className="card-body border-top">
               {tab === 'summary' && (
-                <SummaryPanel insight={detail.insight} onEdit={openConfig} onDeleteWan={deleteWan} />
+                <SummaryPanel insight={detail.insight} onEdit={openConfig} onDeleteWan={deleteWan} onToggleWan={toggleWan} />
               )}
 
               {tab === 'config' && (
-                <Configurator deviceId={id} insight={detail.insight} preset={preset} onQueued={load} />
+                <Configurator deviceId={id} serial={detail.device.serial_number} insight={detail.insight} preset={preset} onQueued={load} />
               )}
 
               {tab === 'params' && (
@@ -519,6 +531,10 @@ function Commands({ deviceId, onRun, editTarget, clearEditTarget }: {
         if (!obj) throw new Error('ObjectName tidak boleh kosong');
         const endpoint = kind === 'addObject' ? 'add-object' : 'delete-object';
         setRes(await api(`/api/devices/${encodeURIComponent(deviceId)}/${endpoint}`, { method: 'POST', body: { objectName: obj } }));
+      } else if (kind === 'factory-reset') {
+        const confirm = window.prompt('Reset pabrik menghapus seluruh konfigurasi ONU.\nKetik serial number perangkat untuk konfirmasi:') ?? '';
+        if (!confirm) throw new Error('Dibatalkan');
+        setRes(await api(`/api/devices/${encodeURIComponent(deviceId)}/${kind}`, { method: 'POST', body: { confirm: confirm.trim() } }));
       } else {
         setRes(await api(`/api/devices/${encodeURIComponent(deviceId)}/${kind}`, { method: 'POST' }));
       }
@@ -613,10 +629,11 @@ function statusBadge(s: string | null) {
   return <span className={`badge ${ok ? 'text-bg-success' : 'text-bg-warning'}`}>{s}</span>;
 }
 
-function SummaryPanel({ insight, onEdit, onDeleteWan }: {
+function SummaryPanel({ insight, onEdit, onDeleteWan, onToggleWan }: {
   insight: DeviceInsight;
   onEdit: (p: Omit<ConfigPreset, 'nonce'>) => void;
   onDeleteWan: (base: string, label: string) => void;
+  onToggleWan: (base: string, enable: boolean, label: string) => void;
 }) {
   const o = insight.optical;
   const lvl = rxLevel(o.rx, o.los);
@@ -654,53 +671,68 @@ function SummaryPanel({ insight, onEdit, onDeleteWan }: {
           <i className="fa-solid fa-network-wired me-2" />Koneksi WAN ({insight.wan.length})
         </h4>
         <button className="btn btn-sm btn-outline-primary ms-auto" onClick={() => onEdit({ mode: 'wan-add' })}>
-          <i className="fa-solid fa-plus me-1" />Buat WAN
+          <i className="fa-solid fa-plus me-1" />WAN Internet
         </button>
       </div>
       <div className="table-responsive mb-3">
         <table className="table table-sm table-hover align-middle mb-0">
           <thead>
             <tr>
-              <th>Koneksi</th><th>Username</th><th>Status</th><th>IP</th>
-              <th>VLAN</th><th>Service</th><th style={{ width: 120 }}></th>
+              <th>Koneksi</th><th>Username</th><th>Status</th><th>IP</th><th>VLAN / Service</th>
             </tr>
           </thead>
           <tbody>
             {insight.wan.length === 0 && (
-              <tr><td colSpan={7} className="text-center text-muted py-3">
+              <tr><td colSpan={5} className="text-center text-muted py-3">
                 Belum ada koneksi WAN terdeteksi — tekan <b>Pelajari struktur</b> lalu <b>Segarkan</b>.
               </td></tr>
             )}
-            {insight.wan.map((c) => (
-              <tr key={c.base}>
-                <td>
-                  <span className={`badge ${c.kind === 'ppp' ? 'text-bg-primary' : 'text-bg-secondary'} me-1`}>
-                    {c.kind === 'ppp' ? 'PPPoE' : 'IP'}
-                  </span>
-                  <span className="small">{c.name || '—'}</span>
-                  <div className="small text-muted font-monospace">
-                    {c.wcd !== null ? `WCD ${c.wcd} · #${c.instance}` : `#${c.instance}`}
-                    {c.connectionType ? ` · ${c.connectionType}` : ''}
-                  </div>
-                </td>
-                <td className="small font-monospace">{c.username || '—'}</td>
-                <td>{statusBadge(c.status)}{c.lastError && c.lastError !== 'ERROR_NONE' && c.lastError !== 'NONE'
-                  ? <div className="small text-danger">{c.lastError}</div> : null}</td>
-                <td className="small font-monospace">{c.externalIp || '—'}</td>
-                <td className="small num">{c.vlan || '—'}</td>
-                <td className="small">{c.serviceList || '—'}</td>
-                <td className="text-end text-nowrap">
-                  <button className="btn btn-sm btn-outline-secondary me-1" title="Ubah PPPoE / VLAN"
-                    onClick={() => onEdit({ mode: c.kind === 'ppp' ? 'pppoe' : 'vlan', target: c.base })}>
-                    <i className="fa-solid fa-pen" />
-                  </button>
-                  <button className="btn btn-sm btn-outline-danger" title="Hapus koneksi"
-                    onClick={() => onDeleteWan(c.base, wanLabel(c))}>
-                    <i className="fa-solid fa-trash" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {insight.wan.map((c) => {
+              const on = /^(1|true)$/i.test(c.enable ?? '');
+              return (
+                <tr key={c.base}>
+                  <td>
+                    <span className={`badge ${c.kind === 'ppp' ? 'text-bg-primary' : 'text-bg-secondary'} me-1`}>
+                      {c.kind === 'ppp' ? 'PPPoE' : 'IP'}
+                    </span>
+                    <span className="small">{c.name || '—'}</span>
+                    <div className="small text-muted font-monospace">
+                      {c.wcd !== null ? `WCD ${c.wcd} · #${c.instance}` : `#${c.instance}`}
+                      {c.connectionType ? ` · ${c.connectionType}` : ''}
+                    </div>
+                    <div className="btn-group btn-group-sm mt-1">
+                      {c.enable !== null && (
+                        <button className={`btn ${on ? 'btn-outline-success' : 'btn-outline-secondary'}`}
+                          title={on ? 'Aktif — klik untuk menonaktifkan' : 'Nonaktif — klik untuk mengaktifkan'}
+                          onClick={() => onToggleWan(c.base, !on, wanLabel(c))}>
+                          <i className={`fa-solid ${on ? 'fa-toggle-on' : 'fa-toggle-off'}`} />
+                        </button>
+                      )}
+                      <button className="btn btn-outline-primary" title="Isi / konfigurasi ulang WAN ini (PPPoE/IPoE, VLAN, binding)"
+                        onClick={() => onEdit({ mode: 'wan-add', target: c.base })}>
+                        <i className="fa-solid fa-sliders" />
+                      </button>
+                      <button className="btn btn-outline-secondary" title="Ubah PPPoE / VLAN cepat"
+                        onClick={() => onEdit({ mode: c.kind === 'ppp' ? 'pppoe' : 'vlan', target: c.base })}>
+                        <i className="fa-solid fa-pen" />
+                      </button>
+                      <button className="btn btn-outline-danger" title="Hapus koneksi"
+                        onClick={() => onDeleteWan(c.base, wanLabel(c))}>
+                        <i className="fa-solid fa-trash" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="small font-monospace">{c.username || '—'}</td>
+                  <td>{statusBadge(c.status)}{c.lastError && c.lastError !== 'ERROR_NONE' && c.lastError !== 'NONE'
+                    ? <div className="small text-danger">{c.lastError}</div> : null}</td>
+                  <td className="small font-monospace">{c.externalIp || '—'}</td>
+                  <td className="small">
+                    <div className="num">{c.vlan && c.vlan !== '0' ? c.vlan : '—'}</div>
+                    <div className="text-muted">{c.serviceList || ''}</div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

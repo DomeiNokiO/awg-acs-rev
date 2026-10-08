@@ -468,6 +468,11 @@ export interface QueuedTask {
   meta?: Record<string, unknown>;
 }
 
+/** RPC yang didahulukan dari bacaan di antrean (lihat TaskQueue.dequeue). */
+const PRIORITY_METHODS = new Set([
+  'SetParameterValues', 'AddObject', 'DeleteObject', 'Reboot', 'FactoryReset', 'Download',
+]);
+
 export class TaskQueue {
   private queues = new Map<string, QueuedTask[]>();
   private ttlMs: number;
@@ -498,12 +503,21 @@ export class TaskQueue {
     return task;
   }
 
+  /**
+   * Ambil RPC berikutnya. Perintah operator (tulis, AddObject/DeleteObject,
+   * Reboot, FactoryReset, Download) DIDAHULUKAN dari bacaan — urutan FIFO
+   * di antara sesamanya tetap terjaga. Dengan begitu konfigurasi tidak
+   * tertahan di belakang puluhan batch GetParameterValues, dan batas RPC
+   * per sesi (beban ONU) lebih dulu terpakai untuk hal yang diminta operator.
+   */
   dequeue(deviceId: string): QueuedTask | null {
     const q = this.queues.get(deviceId);
     if (!q || q.length === 0) return null;
     const now = Date.now();
-    while (q.length && q[0]!.expiresAt < now) q.shift();
-    const task = q.shift() ?? null;
+    for (let i = q.length - 1; i >= 0; i--) if (q[i]!.expiresAt < now) q.splice(i, 1);
+    let idx = q.findIndex((t) => PRIORITY_METHODS.has(t.rpc.method));
+    if (idx < 0) idx = q.length ? 0 : -1;
+    const task = idx >= 0 ? q.splice(idx, 1)[0]! : null;
     if (q.length === 0) this.queues.delete(deviceId);
     return task;
   }

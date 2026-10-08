@@ -54,8 +54,10 @@ const OPT_LEAF = '(?:RXPower|RxPower|TXPower|TxPower|RXOpticalPower|RxOpticalPow
 const CONN_LEAF =
   '(?:Enable|Name|Alias|Username|UserName|ConnectionStatus|ConnectionType|AddressingType|ExternalIPAddress|' +
   'SubnetMask|DefaultGateway|RemoteIPAddress|DNSServers|MACAddress|Uptime|LastConnectionError|NATEnabled|' +
-  'TransportType|PPPoEServiceName|X_[A-Za-z0-9-]+_(?:VLANID|VLANIDMark|VLAN|VLANEnable|VLANMode|8021p|802-1pMark|' +
-  'ServiceList|SERVICELIST|ServiceType|ConnectionMode|LanInterface|IPMode|IPForwardList)|VLANID)';
+  'TransportType|ConnectionTrigger|PPPAuthenticationProtocol|PPPoEServiceName|' +
+  'X_[A-Za-z0-9-]+_(?:VLANID|VLANIDMark|VLAN|VLANEnable|VLANMode|8021p|802-1pMark|PRI|' +
+  'ServiceList|SERVICELIST|ServiceType|ConnectionMode|LanInterface|IPMode|IPForwardList)|' +
+  'X_HW_LANBIND\\.(?:Lan|SSID)\\d+Enable|VLANID)';
 const WLAN_LEAF =
   '(?:Enable|Status|SSID|BeaconType|Channel|AutoChannelEnable|Standard|TotalAssociations|SSIDAdvertisementEnabled|' +
   'KeyPassphrase|PreSharedKey\\.1\\.KeyPassphrase|OperatingFrequencyBand|' +
@@ -63,10 +65,12 @@ const WLAN_LEAF =
 
 const INTEREST: RegExp[] = [
   // ---- TR-098 ----
-  new RegExp(`^${IGD}DeviceInfo\\.(?:Manufacturer|ModelName|SerialNumber|SoftwareVersion|HardwareVersion|UpTime|ProvisioningCode)$`),
+  new RegExp(`^${IGD}DeviceInfo\\.(?:Manufacturer|ModelName|SerialNumber|SoftwareVersion|HardwareVersion|UpTime|ProvisioningCode|TemperatureStatus\\.TemperatureSensor\\.\\d+\\.Value)$`),
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.WANConnectionDevice\\.\\d+\\.WAN(?:PPP|IP)Connection\\.\\d+\\.${CONN_LEAF}$`),
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.WANConnectionDevice\\.\\d+\\.X_[^.]*(?:Link|LINK)Config\\.(?:Enable|Mode|VLANIDMark|VLANID|VLANId|802-1pMark)$`),
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.WANConnectionDevice\\.\\d+\\.X_FH_VLANConfig\\.\\d+\\.VLANID$`),
+  // WCD kosong (dibuat OLT lewat OMCI) — supaya tetap terlihat sebagai lokasi WAN.
+  new RegExp(`^${IGD}WANDevice\\.\\d+\\.WANConnectionDevice\\.\\d+\\.WAN(?:PPP|IP)ConnectionNumberOfEntries$`),
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.(?:X_[^.]+|WANEponInterfaceConfig|WANGponInterfaceConfig)(?:\\.[^.]+)*\\.${OPT_LEAF}$`),
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.WANCommonInterfaceConfig\\.(?:WANAccessType|PhysicalLinkStatus|TotalBytesSent|TotalBytesReceived)$`),
   new RegExp(`^${IGD}LANDevice\\.\\d+\\.WLANConfiguration\\.\\d+\\.${WLAN_LEAF}$`),

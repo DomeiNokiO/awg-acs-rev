@@ -26,7 +26,7 @@ const MAX_BODY = 1024 * 1024;
  * dipetakan ulang otomatis saat Inform berikutnya — profil lama (sebelum
  * perbaikan discovery) tidak memuat redaman/PPPoE di WANConnectionDevice.N.
  */
-export const PROFILE_VERSION = 2;
+export const PROFILE_VERSION = 3;
 
 /**
  * Subtree yang tidak ditelusuri pada mode BFS (firmware yang hanya
@@ -54,6 +54,8 @@ interface SessionEntry {
   /** CPE pernah mengirim cookie sesi ini. */
   viaCookie: boolean;
   noCookieLogged: boolean;
+  /** RPC yang sudah dikirim di sesi ini (lihat MAX_RPC_PER_SESSION). */
+  rpcCount: number;
 }
 
 export interface CwmpContext {
@@ -103,6 +105,16 @@ function soapMethod(xml: string): string {
  */
 const TRACE = Number(process.env['ACS_CWMP_TRACE'] ?? 0);
 
+/**
+ * Batas RPC per sesi CWMP — menjaga ONU (CPU/RAM kecil) tidak dibanjiri
+ * permintaan dalam satu sesi. 0 = tanpa batas. Pemetaan perangkat baru
+ * butuh ±40–70 RPC; dengan batas ini terbagi ke beberapa Inform.
+ */
+const MAX_RPC_PER_SESSION = (() => {
+  const n = Number(process.env['ACS_MAX_RPC_PER_SESSION'] ?? 40);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 40;
+})();
+
 /** Sesi tanpa aktivitas selama ini dibuang dari memori. */
 const SESSION_IDLE_MS = 10 * 60 * 1000;
 /** Batas waktu menebak sesi lewat IP untuk CPE tanpa cookie. */
@@ -131,7 +143,19 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
     const sid = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
     const session = new CwmpSession({
       dequeue: (device) => {
-        const task = ctx.queue.dequeue(deviceIdOf(device));
+        const id = deviceIdOf(device);
+        // Batas beban ONU: setelah N RPC sesi diakhiri dengan rapi (204);
+        // sisa antrean tetap tersimpan dan dikirim pada sesi berikutnya.
+        if (MAX_RPC_PER_SESSION > 0 && entry.rpcCount >= MAX_RPC_PER_SESSION) {
+          const left = ctx.queue.size(id);
+          if (left) {
+            ctx.db.addEvent(id, 'cwmp',
+              `Batas ${MAX_RPC_PER_SESSION} RPC per sesi tercapai — ${left} RPC dilanjutkan pada sesi berikutnya`);
+          }
+          return null;
+        }
+        const task = ctx.queue.dequeue(id);
+        if (task) entry.rpcCount++;
         return task ? task.rpc : null;
       },
       record: (device, result) => {
@@ -145,7 +169,9 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
         }
       },
     });
-    const entry: SessionEntry = { session, identity: null, createdAt: Date.now(), ip, viaCookie: false, noCookieLogged: false };
+    const entry: SessionEntry = {
+      session, identity: null, createdAt: Date.now(), ip, viaCookie: false, noCookieLogged: false, rpcCount: 0,
+    };
     ctx.sessions.set(sid, entry);
     return [sid, entry];
   };
@@ -512,7 +538,12 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
       // task-nya sebagai gagal supaya operator tahu, bukan 'pending' abadi.
       if (result.commandKey && result.method !== 'GetParameterValues') {
         const t = ctx.db.getTask(result.commandKey);
-        if (t) ctx.db.updateTask(result.commandKey, 'failed', { code: result.code, message: result.message });
+        if (t) {
+          ctx.db.updateTask(result.commandKey, 'failed', { code: result.code, message: result.message });
+          // Langkah terakhir rangkaian WAN gagal → tetap petakan ulang agar UI
+          // menampilkan kondisi nyata perangkat.
+          if (parsePayload(t.payload).rediscover === true) rediscoverWan(ctx, deviceId);
+        }
       }
 
       // Fault 9005 untuk GetParameterValues membatalkan SELURUH batch tanpa
@@ -584,11 +615,18 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
       break;
     }
     case 'reboot':
-      ctx.db.addEvent(deviceId, 'reboot', 'Perintah reboot dikirim');
+    case 'factory_reset': {
+      // Respons Reboot/FactoryReset tidak membawa kunci — tutup task
+      // sejenis yang masih menunggu untuk perangkat ini.
+      const kind = result.kind;
+      for (const t of ctx.db.listTasks(deviceId, 50) as { id: string; kind: string; status: string }[]) {
+        if (t.kind === kind && t.status === 'pending') ctx.db.updateTask(t.id, 'done', 'diterima perangkat');
+      }
+      ctx.db.addEvent(deviceId, kind, kind === 'reboot'
+        ? 'Perangkat menerima perintah reboot'
+        : 'Perangkat menerima perintah reset pabrik');
       break;
-    case 'factory_reset':
-      ctx.db.addEvent(deviceId, 'factory_reset', 'Perintah factory reset dikirim');
-      break;
+    }
     default:
       break;
   }
@@ -645,6 +683,8 @@ function handleAddObject(
       objectName: child,
       fills: asFills(then.fills),
       vendorFills: asFills(then.vendorFills),
+      finalFills: asFills(then.finalFills),
+      sequential: then.sequential === true,
       absFills: [...asFills(payload.absFills), ...linkFills],
       label,
     }, WRITE_TTL_MS);
@@ -652,25 +692,31 @@ function handleAddObject(
     return;
   }
 
+  // Urutan tulisan ke instans baru:
+  //   1. parameter standar — satu SPV (atau satu per SPV bila `sequential`);
+  //   2. parameter vendor — SATU per SPV, supaya nama tebakan yang ditolak
+  //      hanya menggagalkan dirinya sendiri, bukan VLAN/ServiceList lain;
+  //   3. finalFills (Enable=true) — terakhir, setelah semua terisi.
+  // Antrean FIFO menjaga urutan ini; pemetaan ulang WAN dipicu oleh SPV
+  // terakhir (berhasil maupun gagal).
   const core = toParams(inst, asFills(payload.fills));
   const vendor = [...toParams(inst, asFills(payload.vendorFills)), ...toParams('', asFills(payload.absFills))];
+  const final = toParams(inst, asFills(payload.finalFills));
+  const groups: ParamValue[][] = [];
   if (core.length) {
-    const k = `fill_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    ctx.db.createTask(k, deviceId, 'write',
-      // GPN pemetaan ulang diantrekan setelah jawaban SPV ini, sehingga
-      // (FIFO) berjalan sesudah SPV vendor yang sudah ada di antrean.
-      { params: core, label: `${label}: isi ${inst}`, rediscover: true }, WRITE_TTL_MS);
-    enqueueWrite(ctx, deviceId, core, k);
+    if (payload.sequential === true) core.forEach((p) => groups.push([p]));
+    else groups.push(core);
   }
-  // Parameter vendor dikirim SATU per SPV: nama hasil tebakan yang ditolak
-  // perangkat hanya menggagalkan dirinya sendiri, bukan VLAN/ServiceList lain.
-  vendor.forEach((p, i) => {
-    const k = `fillv_${Date.now().toString(36)}_${i}_${Math.random().toString(36).slice(2, 6)}`;
+  vendor.forEach((p) => groups.push([p]));
+  if (final.length) groups.push(final);
+  groups.forEach((g, i) => {
+    const k = `fill_${Date.now().toString(36)}_${i}_${Math.random().toString(36).slice(2, 6)}`;
+    const what = g.length > 1 ? `isi ${inst}` : g[0]!.name.split('.').slice(-2).join('.');
     ctx.db.createTask(k, deviceId, 'write',
-      { params: [p], label: `${label}: ${p.name.split('.').slice(-2).join('.')}`, rediscover: !core.length }, WRITE_TTL_MS);
-    enqueueWrite(ctx, deviceId, [p], k);
+      { params: g, label: `${label}: ${what}`, rediscover: i === groups.length - 1 }, WRITE_TTL_MS);
+    enqueueWrite(ctx, deviceId, g, k);
   });
-  if (!core.length && !vendor.length) rediscoverWan(ctx, deviceId);
+  if (!groups.length) rediscoverWan(ctx, deviceId);
 }
 
 /* ------------------------------------------------------------------ *

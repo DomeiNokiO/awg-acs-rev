@@ -156,6 +156,8 @@ Variabel lingkungan (waktu jalankan server):
 | `ACS_CWMP_TLS_CERT` / `ACS_CWMP_TLS_KEY` | — | TLS untuk CWMP (:7547) |
 | `ACS_API_TLS_CERT` / `ACS_API_TLS_KEY` | — | TLS untuk API/UI (:8080) |
 | `ACS_SESSION_TTL` | `8` (jam) | Masa berlaku sesi login |
+| `ACS_MAX_RPC_PER_SESSION` | `40` | Batas RPC per sesi CWMP (beban ONU). Sisa antrean dilanjutkan pada Inform berikutnya; `0` = tanpa batas |
+| `ACS_COLLECT_INTERVAL_MIN` | `30` | Interval pembacaan ulang parameter per ONU (menit, min. 5) |
 | `ACS_CWMP_TRACE` | `0` | `1` = catat alur RPC per ONU ke log (`journalctl -u acs`); `2` = juga isi SOAP (memuat kredensial — hanya untuk diagnosis) |
 | `ACS_BIND` | `0.0.0.0` | Bind address semua listener |
 
@@ -316,9 +318,20 @@ Ubah/Hapus) dan semua SSID (tombol Ubah). Tab **Konfigurasi**:
 | SSID & sandi WiFi | `{"type":"wifi","wlanIndex":1,"ssid":"…","passphrase":"…"}` | `SetParameterValues` |
 | Kredensial PPPoE | `{"type":"pppoe","target":"<path koneksi>","username":"…","password":"…","vlanId":100}` | `SetParameterValues` (kredensial & VLAN terpisah) |
 | VLAN | `{"type":"vlan","target":"<path koneksi>","vlanId":200}` | `SetParameterValues` |
-| Buat WAN PPPoE | `{"type":"wan-add","username":"…","password":"…","vlanId":100,"bridge":false}` | `AddObject` WCD → `AddObject` WANPPPConnection → `SetParameterValues` |
-| Buat WAN IP | `{"type":"wan-ip-add","staticIp":"…","netmask":"…","gateway":"…","dns":"…"}` | sama, WANIPConnection |
-| Hapus WAN | `{"type":"wan-delete","target":"<path koneksi>"}` | `DeleteObject` |
+| WAN PPPoE — WCD baru | `{"type":"wan-add","placement":"new","username":"…","password":"…","vlanId":100}` | `AddObject` WCD → `AddObject` WANPPPConnection → SPV standar → SPV vendor → `Enable` |
+| WAN PPPoE — isi slot OLT (mis. `WCD 2 · #1 · PPPoE_Routed`) | `{"type":"wan-add","placement":"existing","target":"<path koneksi>","username":"…","password":"…","vlanId":100}` | `Enable=false` → SPV standar → SPV vendor → `Enable=true` |
+| WAN di WCD yang ada | `{"type":"wan-add","placement":"wcd","wcd":3,…}` | `AddObject` WANPPPConnection di WCD 3 → isi |
+| WAN IPoE (DHCP/Static/bridge) | `{"type":"wan-ip-add","placement":"new","staticIp":"…","netmask":"…","gateway":"…","dns":"…"}` | sama, WANIPConnection |
+| Binding port, ConnectionType, bertahap | `"bindLan":[1,2],"bindSsid":[1],"connectionType":"PPPoE_Routed","sequential":true` | `X_HW_LANBIND` / `X_*_LanInterface`; nilai ConnectionType otomatis mengikuti ONU |
+| Hapus / aktif-nonaktif WAN | `{"type":"wan-delete","target":…}` / `{"type":"wan-enable","target":…,"enable":false}` | `DeleteObject` / SPV `Enable` |
+| Interval Inform | `{"type":"inform-interval","informInterval":600}` | SPV `ManagementServer.PeriodicInformInterval` |
+| Reboot / reset pabrik | `POST /reboot` / `POST /factory-reset {"confirm":"<serial>"}` (admin) | `Reboot` / `FactoryReset` |
+
+Nama parameter vendor (VLAN level koneksi/link, ServiceList, binding) untuk
+Huawei, ZTE, FiberHome, CMCC, CT-COM, CU dipilih otomatis — tabel lengkap di
+[docs/PROVISIONING.md](docs/PROVISIONING.md#pengetahuan-vendor-wan-vendorwants).
+Beban ONU dijaga: maks. `ACS_MAX_RPC_PER_SESSION` RPC per sesi, dan perintah
+operator didahulukan dari pembacaan rutin.
 
 `target` diambil dari `insight.wan[].base` (`GET /api/devices/:id`). Nama
 parameter vendor (`X_HW_VLAN`, `X_ZTE-COM_VLANID`, `X_FH_VLANID`,
@@ -561,8 +574,9 @@ ditandai ✓.
 | **NBI: skema OpenAPI** | belum | Referensi resmi = tabel endpoint di `docs/API.md`. |
 | **Skala ribuan ONU** | ⚠ perlu diukur | Parameter tiap ONU disimpan di SQLite (WAL aktif, index `(device_id, path)`) dan `DatabaseSync` bersifat sinkron — jadi operasi DB serialize, belum paralel. Praktis untuk ratusan–ribuan ONU dengan Inform jarang, tapi batasnya harus diukur, bukan dikira-kira. |
 | **Uji otomatis** | sebagian | 16 tes unit (sesi CWMP, SOAP, antrean, insight, profiler) + simulator ONT (`scripts/sim-ont.mjs`). Revisi ini diverifikasi end-to-end dengan simulator strict ZTE/Huawei/TR-181; **belum diuji ke ONU fisik**. |
-| **Konfigurasi ONU dari UI** | ✓ ada | SSID/sandi WiFi (multi-SSID), PPPoE, VLAN, buat WAN PPPoE/IP (route/bridge), hapus WAN. Lihat bagian *Provisioning & Konfigurasi ONU*. |
-| **Buat WAN untuk TR-181** | belum | Butuh PPP.Interface + IP.Interface + VLANTermination; sementara lewat tab Perintah → AddObject. Baca data, WiFi, PPPoE, VLAN TR-181 sudah didukung. |
+| **Konfigurasi ONU dari UI** | ✓ ada | SSID/sandi WiFi (multi-SSID), PPPoE, VLAN, WAN internet PPPoE/IPoE (WCD baru / WCD yang ada / isi slot OLT, route/bridge, binding port, bertahap), aktif/nonaktif & hapus WAN, reboot, reset pabrik, interval Inform. |
+| **Buat WAN untuk TR-181** | sebagian | Mengisi `PPP.Interface` yang sudah ada didukung; membuat baru (PPP.Interface + IP.Interface + VLANTermination) belum — sementara lewat tab Perintah → AddObject. |
+| **Parameter WAN Nokia** | belum | Nama VLAN/ServiceList Nokia belum diketahui; isi lewat "Parameter tambahan". |
 | **Antrean RPC persisten** | belum | Antrean RPC di memori; tulisan yang belum terkirim hilang saat ACS restart. |
 
 ## Rencana Pematangan

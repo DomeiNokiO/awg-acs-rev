@@ -110,6 +110,9 @@ Selalu ikut dibaca — terutama untuk redaman yang berada **di luar** root disco
 | ZTE F660/F609 lama | `InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.Stats.RxPower` |
 | Huawei HG8245/HG8546M | `WANDevice.1.X_GponInterafceConfig.RXPower` (typo bawaan firmware) |
 | Huawei EG8145V5 dkk. | `InternetGatewayDevice.X_HW_DEBUG.AdminTR069.RxPower` |
+| Huawei HG/EG baru | `WANDevice.1.X_HW_GponInterfaceConfig.RXPower` / `TXPower` |
+| China Unicom / generik | `WANDevice.1.X_CU_GponInterfaceConfig.RXPower`, `WANDevice.1.WANPONInterfaceConfig.RXPower` |
+| Suhu perangkat (fallback) | `DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value` |
 | Nokia / Alcatel-Lucent | `InternetGatewayDevice.X_ALU_OntOpticalParam.RXPower` |
 | CT-COM / CMCC / CU | `WANDevice.1.X_CT-COM_*`, `X_CMCC_*`, `X_CU_WANEPONInterfaceConfig.OpticalTransceiver.RXPower` |
 | EPON standar | `WANDevice.1.WANEponInterfaceConfig.RXPower` |
@@ -169,11 +172,16 @@ Tanpa `target`, dipakai koneksi PPPoE utama (punya username, utamakan yang Conne
 | `type` | Field | Yang dikirim ke perangkat |
 |--------|-------|---------------------------|
 | `wifi` | `wlanIndex`, `ssid?`, `passphrase?`, `wifiEnable?` | SPV `SSID`/`Enable` + sandi ke semua lokasi sandi yang ada |
-| `pppoe` | `target?`, `username?`, `password?`, `vlanId?`, `serviceName?` | SPV kredensial; SPV VLAN; SPV ServiceList |
-| `vlan` | `target?`, `vlanId` | SPV VLAN (+ penanda aktif vendor) |
-| `wan-add` | `username`, `password`, `vlanId?`, `name?`, `bridge?`, `serviceName?`, `extra?` | AddObject WCD → AddObject `WANPPPConnection.` → SPV standar → SPV vendor (satu per parameter) → pemetaan ulang WAN |
-| `wan-ip-add` | `staticIp?`, `netmask?`, `gateway?`, `dns?`, `vlanId?`, `bridge?`, `name?`, `extra?` | sama, `WANIPConnection.` (DHCP bila tanpa `staticIp`) |
+| `pppoe` | `target?`, `username?`, `password?`, `vlanId?`, `serviceName?` | Ubah cepat: SPV kredensial; SPV VLAN; SPV ServiceList |
+| `vlan` | `target?`, `vlanId` | SPV VLAN (+ pendamping vendor) |
+| `wan-add` | `placement`, `target?`/`wcd?`, `username`, `password`, `vlanId?`, `name?`, `bridge?`, `connectionType?`, `serviceName?`, `bindLan?`, `bindSsid?`, `sequential?`, `extra?` | WAN internet **PPPoE** di lokasi pilihan (lihat bawah) |
+| `wan-ip-add` | sama, plus `staticIp?`, `netmask?`, `gateway?`, `dns?` | WAN internet **IPoE** (DHCP bila tanpa `staticIp`, atau bridge) |
 | `wan-delete` | `target` | DeleteObject WCD (bila koneksi satu-satunya) atau koneksinya |
+| `wan-enable` | `target`, `enable` | SPV `Enable` koneksi |
+| `inform-interval` | `informInterval` (60–86400) | SPV `ManagementServer.PeriodicInformEnable/Interval` |
+
+Perintah perangkat (endpoint terpisah): `POST /reboot`, `POST /factory-reset`
+(admin + `{"confirm":"<serial number>"}`), `POST /connect`, `POST /refresh`.
 
 Respons: `{queued, plan[], skipped[], guessed[], tasks[], writes[]}`. Bila
 tidak ada yang diantrekan → HTTP 400 dengan `error` berisi alasannya.
@@ -189,43 +197,83 @@ tidak ada yang diantrekan → HTTP 400 dengan `error` berisi alasannya.
   lama tidak sah di TR-098 dan membuat seluruh SPV ditolak.
 - TR-181: `WiFi.SSID.N.SSID`, `WiFi.AccessPoint.N.Security.KeyPassphrase`.
 
-### VLAN
+### Pengetahuan vendor WAN (`vendorwan.ts`)
 
-Urutan pemilihan path:
+| Keluarga | VLAN level koneksi | VLAN level link (WCD) | ServiceList | Binding port |
+|----------|--------------------|-----------------------|-------------|--------------|
+| Huawei | `X_HW_VLAN` | – | `X_HW_SERVICELIST` | `X_HW_LANBIND.Lan{1-4}Enable`, `SSID{1-8}Enable` |
+| ZTE | `X_ZTE-COM_VLANEnable=true` + `X_ZTE-COM_VLANID` | `X_ZTE-COM_WANPONLinkConfig.VLANID` | `X_ZTE-COM_ServiceList` | `X_ZTE-COM_LanInterface` |
+| FiberHome | `X_FH_VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | – |
+| CMCC | `X_CMCC_VLANMode=2` + `X_CMCC_VLANIDMark` | `X_CMCC_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` |
+| CT-COM | `X_CT-COM_VLANMode=2` + `X_CT-COM_VLANIDMark` | `X_CT-COM_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CT-COM_ServiceList` | `X_CT-COM_LanInterface` |
+| CU | – | `X_CU_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CU_ServiceList` | `X_CU_LanInterface` |
+| Nokia | (belum diketahui — pakai "Parameter tambahan") | – | – | – |
 
-1. path VLAN yang **terbaca** untuk koneksi itu (`insight.wan[].vlanPath`);
-2. path vendor yang **terbukti ada** di perangkat:
-   - level koneksi: `X_HW_VLAN`, `X_ZTE-COM_VLANID`, `X_FH_VLANID`,
-     `X_CMCC_VLANIDMark`, `X_CT-COM_VLANIDMark`, `VLANID`;
-   - level link: `WANConnectionDevice.N.X_CT-COM|X_CMCC|X_CU_WANGponLinkConfig.VLANIDMark`,
-     `X_*_WANEponLinkConfig.VLANIDMark`, `X_ZTE-COM_WANPONLinkConfig.VLANID`;
-3. tebakan per keluarga vendor (Huawei `X_HW_VLAN`, ZTE `X_ZTE-COM_VLANID`,
-   FiberHome `X_FH_VLANID`, lainnya link config CT-COM) — dilaporkan di `guessed`.
+Urutan pemilihan nama: **bukti** di perangkat (hasil baca/discovery, instans
+mana pun, PPP maupun IP) → **tebakan keluarga** (dilaporkan di `guessed`).
+Keluarga ditentukan dari bukti path lalu Manufacturer/OUI; ODM China tanpa
+nama operator diperlakukan sebagai CT-COM. `LanInterface` berisi daftar objek
+`InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.N` /
+`WLANConfiguration.N` dipisah koma.
 
-Penanda yang menyertai bila ada: `X_ZTE-COM_VLANEnable=true`,
-`X_*_LinkConfig.Mode=2` (tagged). TR-181: `Ethernet.VLANTermination.N.VLANID`
-yang dirujuk `PPP.Interface.N.LowerLayers`.
+Parameter standar TR-098 yang ditulis: `Name`, `ConnectionType`, `Username`,
+`Password`, `NATEnabled`; `TransportType=PPPoE`,
+`PPPAuthenticationProtocol=AUTO`, `ConnectionTrigger=AlwaysOn` hanya bila
+terbukti ada (forum GenieACS 7384/7385). IPoE: `AddressingType`
+DHCP/Static (+ `ExternalIPAddress`, `SubnetMask`, `DefaultGateway`, `DNSServers`).
 
-### Buat WAN
+### WAN internet: lokasi (`placement`)
+
+| `placement` | Kapan dipakai | Yang terjadi |
+|-------------|---------------|--------------|
+| `existing` + `target` | Slot yang sudah ada — mis. FiberHome **`WCD 2 · #1 · PPPoE_Routed`** yang disiapkan OLT lewat OMCI, atau WAN yang mau diganti | `Enable=false` (bila aktif) → SPV standar → SPV vendor satu per satu → `Enable=true`. `ConnectionType` slot dipertahankan kecuali dipilih/mode route↔bridge berubah |
+| `wcd` + `wcd` | WCD kosong yang sudah ada (mis. dibuat OLT) | `AddObject …WANConnectionDevice.N.WANPPPConnection.` → isi; VLAN level link ditulis ke WCD N |
+| `new` | Tidak ada slot — pola umum ZTE/Huawei/FiberHome (satu WAN = satu WCD) | `AddObject WANConnectionDevice.` → `AddObject WANPPPConnection.` di dalamnya → isi |
+
+UI (tab **Konfigurasi → WAN Internet**) mendaftar semua pilihan:
+"WANConnectionDevice baru", setiap koneksi yang ada ("Isi (kosong)/(timpa):
+PPPoE · WCD 2 · #1 · PPPoE_Routed · …"), dan setiap WCD. **Default** = slot
+kosong pertama di luar WCD 1 (TR069) bila ada, selain itu WCD baru. Tombol
+⚙ di tabel Koneksi WAN (Ringkasan) langsung membuka formulir untuk slot itu.
+
+**ConnectionType** otomatis mengikuti nilai yang sudah dipakai perangkat
+(mis. `PPPoE_Routed` di sebagian FiberHome), selain itu standar TR-098
+(`IP_Routed`, `PPPoE_Bridged`, `IP_Bridged`). Bisa dipilih manual.
+
+**Pengiriman bertahap** (`sequential`): setiap parameter dikirim sebagai SPV
+tersendiri. Otomatis aktif untuk keluarga CMCC (forum 7385: ONU CMDC hanya
+konsisten bila diisi berurutan); bisa dipaksa untuk ONU lain.
 
 ```
-AddObject InternetGatewayDevice.WANDevice.1.WANConnectionDevice.      → N
-AddObject …WANConnectionDevice.N.WANPPPConnection.                     → M
-SPV standar …N.WANPPPConnection.M.{Name, ConnectionType, Username,
-            Password, NATEnabled, Enable}
-SPV vendor  …M.X_HW_VLAN / …M.X_HW_SERVICELIST / …N.X_CT-COM_WANGponLinkConfig.*  (satu per SPV)
+new (PPPoE, FiberHome):
+AddObject InternetGatewayDevice.WANDevice.1.WANConnectionDevice.            → N
+AddObject …WANConnectionDevice.N.WANPPPConnection.                           → M
+SPV …N.WANPPPConnection.M.{Name, ConnectionType=PPPoE_Routed, TransportType,
+     Username, Password, ConnectionTrigger, NATEnabled}
+SPV …M.X_FH_VLANID          SPV …M.X_FH_ServiceList
+SPV …N.X_FH_WANGponLinkConfig.Mode=2   SPV …N.X_FH_WANGponLinkConfig.VLANID
+SPV …M.Enable=true
 GPN WANDevice.  → WAN baru muncul di UI
 ```
 
-- Satu WAN = satu WCD — pola ZTE/Huawei/FiberHome. Menambah koneksi ke WCD.1
-  milik TR069 sering ditolak atau mengganggu manajemen.
-- `ConnectionType`: `IP_Routed` / `PPPoE_Bridged` / `IP_Bridged`.
-- Nama vendor diambil dari koneksi lain di perangkat yang sama bila ada; bila
-  tidak, tebakan keluarga vendor.
 - **Parameter tambahan** (`extra`): satu baris `Path = nilai`, relatif ke
-  koneksi baru (`X_HW_LANBIND.Lan1Enable = 1`) atau absolut. Tipe ditebak
-  (boolean/angka/string) kecuali perangkat sudah melaporkan tipenya.
-- TR-181 belum didukung untuk buat WAN otomatis.
+  koneksi (`X_HW_PRI = 0`) atau absolut. Tipe ditebak kecuali perangkat sudah
+  melaporkan tipenya.
+- TR-181: hanya `existing` untuk `PPP.Interface` (username/password/VLAN);
+  WAN baru belum didukung.
+
+### Perintah perangkat & beban ONU
+
+- **Reboot**, **reset pabrik** (admin; ketik serial number), **interval
+  Inform**, **aktif/nonaktif WAN**, **Hubungi** — di tab Konfigurasi →
+  Perangkat dan di tabel Koneksi WAN.
+- **Prioritas antrean**: SetParameterValues/AddObject/DeleteObject/Reboot/
+  FactoryReset/Download didahulukan dari bacaan; FIFO di antara sesamanya.
+- **Batas RPC per sesi** `ACS_MAX_RPC_PER_SESSION` (default 40; 0 = tanpa
+  batas). Setelah batas tercapai sesi diakhiri (204) dan sisanya dilanjutkan
+  pada Inform berikutnya — pemetaan ONU baru (±40–100 RPC) terbagi ke 2–3 sesi.
+- Pembacaan rutin hanya saat jatuh tempo (`ACS_COLLECT_INTERVAL_MIN`, default
+  30) atau event BOOT/VALUE CHANGE/CONNECTION REQUEST; batch 24 path.
 
 ### Task & status
 

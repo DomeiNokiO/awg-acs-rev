@@ -37,6 +37,8 @@ export const PATH_INFO_098: string[] = [
   `${P}ManagementServer.PeriodicInformInterval`,
   `${P}LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress`,
   `${P}LANDevice.1.Hosts.HostNumberOfEntries`,
+  // Suhu perangkat standar TR-098 (dipakai bila ONU tak punya suhu optik)
+  `${P}DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value`,
 ];
 
 /** Keluarga vendor untuk memilih kandidat redaman yang dicoba lebih dulu. */
@@ -76,6 +78,9 @@ const OPT: Record<Exclude<OpticalFamily, 'unknown'>, string[]> = {
     // EG8145V5 dkk.
     `${P}X_HW_DEBUG.AdminTR069.RxPower`,
     `${P}X_HW_DEBUG.AdminTR069.TxPower`,
+    // HG/EG generasi baru (genieacs-panel deviceParameterFallbacks.js)
+    `${W1}X_HW_GponInterfaceConfig.RXPower`,
+    `${W1}X_HW_GponInterfaceConfig.TXPower`,
   ],
   nokia: [
     `${P}X_ALU_OntOpticalParam.RXPower`,
@@ -96,6 +101,9 @@ const OPT: Record<Exclude<OpticalFamily, 'unknown'>, string[]> = {
     `${W1}X_CT-COM_GponInterfaceConfig.TXPower`,
     `${W1}X_CT-COM_EponInterfaceConfig.RXPower`,
     `${W1}X_CU_WANEPONInterfaceConfig.OpticalTransceiver.RXPower`,
+    `${W1}X_CU_GponInterfaceConfig.RXPower`,
+    `${W1}WANPONInterfaceConfig.RXPower`,
+    `${W1}WANPONInterfaceConfig.TXPower`,
     `${P}X_CT-COM_GponInterfaceConfig.Stats.RxPower`,
     `${P}X_CT-COM_EponInterfaceConfig.Stats.RxPower`,
     `${P}X_Realtek_EponInterfaceConfig.Stats.RxPower`,

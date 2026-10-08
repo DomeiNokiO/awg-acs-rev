@@ -358,7 +358,7 @@ function maskDevice<T extends {
     const { id } = req.params as { id: string };
     if (!db.getDevice(id)) return reply.code(404).send({ error: 'device_not_found' });
     const key = enqueueReboot(ctx, id);
-    db.createTask(key, id, 'reboot', {});
+    db.createTask(key, id, 'reboot', { label: 'Reboot' }, 24 * 60 * 60 * 1000);
     db.addEvent(id, 'task', 'Reboot diantrekan');
     emitWebhook('task', `Reboot diantrekan untuk ${id}`, { deviceId: id, action: 'reboot' });
     return reply.send({ task: key });
@@ -366,9 +366,17 @@ function maskDevice<T extends {
 
   app.post('/api/devices/:id/factory-reset', async (req, reply) => {
     const { id } = req.params as { id: string };
-    if (!db.getDevice(id)) return reply.code(404).send({ error: 'device_not_found' });
+    const dev = db.getDevice(id);
+    if (!dev) return reply.code(404).send({ error: 'device_not_found' });
+    // Reset pabrik menghapus PPPoE/WiFi pelanggan (dan bisa juga URL ACS):
+    // hanya admin, dan wajib konfirmasi dengan mengetik serial number.
+    if (req.authUser?.role !== 'admin') return reply.code(403).send({ error: 'admin_required' });
+    const confirm = String(((req.body ?? {}) as { confirm?: unknown }).confirm ?? '').trim();
+    if (confirm !== dev.serial_number) {
+      return reply.code(400).send({ error: 'Konfirmasi tidak cocok: ketik serial number perangkat untuk reset pabrik' });
+    }
     const key = enqueueFactoryReset(ctx, id);
-    db.createTask(key, id, 'factory_reset', {});
+    db.createTask(key, id, 'factory_reset', { label: 'Reset pabrik' }, 24 * 60 * 60 * 1000);
     db.addEvent(id, 'task', 'Factory reset diantrekan');
     emitWebhook('task', `Factory reset diantrekan untuk ${id}`, { deviceId: id, action: 'factory_reset' });
     return reply.send({ task: key, warning: 'Perangkat akan kehilangan semua konfigurasi' });

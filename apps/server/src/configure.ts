@@ -25,7 +25,11 @@ import {
   enqueueWrite, enqueueAddObject, enqueueDeleteObject, deviceModel, WRITE_TTL_MS,
   type CwmpContext,
 } from './cwmp.ts';
-import { extractWan, extractWlan, type WanConn, type DataModel } from './insight.ts';
+import { extractWan, extractWlan, extractWcds, observedConnTypes, type WanConn, type DataModel } from './insight.ts';
+import {
+  planVlan as vendorVlan, planService as vendorService, planBinding, planStandard,
+  chooseConnectionType, type Evidence, type Family, type Fill,
+} from './vendorwan.ts';
 
 export type XsdType =
   | 'xsd:string' | 'xsd:int' | 'xsd:unsignedInt' | 'xsd:boolean'
@@ -39,9 +43,23 @@ export type ConfigType =
   | 'vlan'        // set VLAN pada koneksi yang ada
   | 'wan-add'     // buat WAN PPPoE baru
   | 'wan-ip-add'  // buat WAN IP (DHCP/Static/Bridge) baru
-  | 'wan-delete'; // hapus koneksi WAN
+  | 'wan-delete'  // hapus koneksi WAN
+  | 'wan-enable'  // aktif/nonaktifkan koneksi WAN
+  | 'inform-interval'; // interval Inform periodik ONU
 
-export const CONFIG_TYPES: ConfigType[] = ['wifi', 'pppoe', 'vlan', 'wan-add', 'wan-ip-add', 'wan-delete'];
+export const CONFIG_TYPES: ConfigType[] = [
+  'wifi', 'pppoe', 'vlan', 'wan-add', 'wan-ip-add', 'wan-delete', 'wan-enable', 'inform-interval',
+];
+
+/**
+ * Lokasi WAN baru:
+ *  - `new`      : WANConnectionDevice baru → koneksi di dalamnya (pola umum);
+ *  - `wcd`      : koneksi baru di dalam WCD yang SUDAH ada (`wcd` = nomornya,
+ *                 mis. WCD kosong yang dibuat OLT lewat OMCI);
+ *  - `existing` : isi/timpa koneksi yang sudah ada (`target`), mis.
+ *                 "WCD 2 · #1 · PPPoE_Routed" yang disiapkan OLT FiberHome.
+ */
+export type WanPlacement = 'new' | 'wcd' | 'existing';
 
 export interface ConfigRequest {
   type: ConfigType;
@@ -65,6 +83,19 @@ export interface ConfigRequest {
   dns?: string;
   /** Baris tambahan "Path = nilai" (relatif ke koneksi baru, atau absolut). */
   extra?: string;
+  placement?: WanPlacement;
+  wcd?: number;
+  /** Nilai ConnectionType eksplisit (mis. "PPPoE_Routed"); kosong = otomatis. */
+  connectionType?: string;
+  /** Kirim satu parameter per SetParameterValues (ONU yang tidak konsisten). */
+  sequential?: boolean;
+  /** Binding port: nomor LAN (1-4) dan SSID (1-4) yang dipakai WAN ini. */
+  bindLan?: number[];
+  bindSsid?: number[];
+  // wan-enable
+  enable?: boolean;
+  // inform-interval (detik)
+  informInterval?: number;
 }
 
 export interface ConfigReport {
@@ -77,7 +108,6 @@ export interface ConfigReport {
   tasks: string[];
 }
 
-type Family = 'huawei' | 'zte' | 'fiberhome' | 'ct' | 'cmcc' | 'cu';
 
 /* ------------------------------------------------------------------ *
  * Validasi input
@@ -169,101 +199,61 @@ function familyOf(k: Knowledge): Family {
   // Firmware China Mobile (GM220-S dll.) melaporkan operator sebagai pabrikan.
   if (/cmcc|china ?mobile|chinamobile/.test(m)) return 'cmcc';
   if (/unicom|cucc/.test(m)) return 'cu';
+  if (/nokia|alcatel|alcl/.test(m)) return 'nokia';
+  // ODM China tanpa nama operator (CDATA, VSOL, Hioso…) umumnya memakai
+  // profil gateway China Telecom.
   return 'ct';
 }
 
 /* ------------------------------------------------------------------ *
- * Perencanaan tulisan VLAN / ServiceList
+ * Jembatan ke vendorwan.ts
  * ------------------------------------------------------------------ */
 
-const LINK_VLAN: Record<Family, string | null> = {
-  huawei: null,
-  zte: null,
-  fiberhome: null,
-  ct: 'X_CT-COM_WANGponLinkConfig',
-  cmcc: 'X_CMCC_WANGponLinkConfig',
-  cu: 'X_CU_WANGponLinkConfig',
-};
-const CONN_VLAN: Record<Family, string | null> = {
-  huawei: 'X_HW_VLAN', zte: 'X_ZTE-COM_VLANID', fiberhome: 'X_FH_VLANID', ct: null, cmcc: null, cu: null,
-};
-const CONN_SERVICE: Record<Family, string> = {
-  huawei: 'X_HW_SERVICELIST', zte: 'X_ZTE-COM_ServiceList', fiberhome: 'X_FH_ServiceList',
-  ct: 'X_CT-COM_ServiceList', cmcc: 'X_CMCC_ServiceList', cu: 'X_CU_ServiceList',
-};
-
-interface Planned { params: ParamValue[]; guessed: string[]; note?: string }
+/**
+ * Bukti untuk vendorwan.ts. Nama ekstensi vendor sama untuk koneksi PPP
+ * dan IP (X_HW_VLAN, X_ZTE-COM_VLANID, …), jadi bukti di WANPPPConnection
+ * berlaku juga untuk WANIPConnection baru — dan sebaliknya.
+ */
+function evidence(k: Knowledge): Evidence {
+  const sibling = (p: string): string => p.includes('.WANIPConnection.')
+    ? p.replace('.WANIPConnection.', '.WANPPPConnection.')
+    : p.replace('.WANPPPConnection.', '.WANIPConnection.');
+  const has = (p: string): boolean => existsLike(k, p) && !k.invalid.has(p);
+  const vendorLeaf = (p: string): boolean => /\.X_[^.]+(\.[^.]+)?$/.test(p);
+  return {
+    exists: (p) => has(p) || (vendorLeaf(p) && has(sibling(p))),
+    typeFor: (p, fb) => {
+      const t = typeFor(k, p, fb);
+      return t !== fb ? t : typeFor(k, sibling(p), fb);
+    },
+    family: familyOf(k),
+  };
+}
 
 function linkBase(connBase: string): string | null {
   const m = /^(InternetGatewayDevice\.WANDevice\.\d+\.WANConnectionDevice\.\d+\.)/.exec(connBase);
   return m ? m[1]! : null;
 }
 
-/**
- * Tulisan VLAN untuk koneksi yang SUDAH ADA. Mengembalikan beberapa
- * ParamValue bila vendor butuh penanda aktif (mis. X_ZTE-COM_VLANEnable,
- * Mode=2 tagged pada link config CT-COM).
- */
-function planVlan(k: Knowledge, conn: WanConn, v: number): Planned {
-  const out: ParamValue[] = [];
-  const guessed: string[] = [];
-  const val = String(v);
+const prefixed = (base: string, fills: Fill[]): ParamValue[] =>
+  fills.map((f) => ({ name: `${base}${f.name}`, type: f.type, value: f.value }));
 
+/** VLAN untuk koneksi yang sudah ada: path terbaca → bukti → tebakan keluarga. */
+function vlanWrites(k: Knowledge, conn: WanConn, v: number, rep: ConfigReport): ParamValue[] {
   if (k.model === 'TR-181') {
-    if (!conn.vlanPath) return { params: [], guessed, note: 'VLANTermination untuk koneksi ini tidak ditemukan' };
-    out.push({ name: conn.vlanPath, type: typeFor(k, conn.vlanPath, 'xsd:unsignedInt'), value: val });
-    return { params: out, guessed };
+    if (!conn.vlanPath) { rep.skipped.push('VLANTermination untuk koneksi ini tidak ditemukan'); return []; }
+    return [{ name: conn.vlanPath, type: typeFor(k, conn.vlanPath, 'xsd:unsignedInt'), value: String(v) }];
   }
-
-  const lb = linkBase(conn.base);
-  // 1) path VLAN yang benar-benar terbaca untuk koneksi ini
-  let path = conn.vlanPath;
-  // 2) path VLAN lain yang diketahui ada (instans ini atau bentuk sama)
-  if (!path) {
-    const cands = [
-      ...['X_HW_VLAN', 'X_ZTE-COM_VLANID', 'X_FH_VLANID', 'X_CMCC_VLANIDMark', 'X_CT-COM_VLANIDMark', 'VLANID']
-        .map((n) => `${conn.base}${n}`),
-      ...(lb ? ['X_CT-COM_WANGponLinkConfig', 'X_CMCC_WANGponLinkConfig', 'X_CU_WANGponLinkConfig',
-        'X_CT-COM_WANEponLinkConfig', 'X_CMCC_WANEponLinkConfig']
-        .map((n) => `${lb}${n}.VLANIDMark`) : []),
-      ...(lb ? [`${lb}X_ZTE-COM_WANPONLinkConfig.VLANID`] : []),
-    ];
-    path = cands.find((c) => existsLike(k, c) && !k.invalid.has(c)) ?? null;
+  const lb = linkBase(conn.base) ?? conn.base;
+  const plan = vendorVlan(evidence(k), conn.base, lb, v);
+  if (plan.note) rep.skipped.push(plan.note);
+  rep.guessed.push(...plan.guessed);
+  const out = [...prefixed(conn.base, plan.conn), ...prefixed(lb, plan.link)];
+  // Path VLAN yang terbaca tapi tidak tercakup skema mana pun tetap ditulis.
+  if (conn.vlanPath && !out.some((p) => p.name === conn.vlanPath)) {
+    out.push({ name: conn.vlanPath, type: typeFor(k, conn.vlanPath, 'xsd:unsignedInt'), value: String(v) });
   }
-  // 3) tebakan per keluarga vendor
-  if (!path) {
-    const fam = familyOf(k);
-    const cv = CONN_VLAN[fam];
-    const lv = LINK_VLAN[fam];
-    path = cv ? `${conn.base}${cv}` : lb && lv ? `${lb}${lv}.VLANIDMark` : null;
-    if (path) guessed.push(path);
-  }
-  if (!path) return { params: [], guessed, note: 'Nama parameter VLAN tidak diketahui untuk perangkat ini' };
-
-  out.push({ name: path, type: typeFor(k, path, 'xsd:unsignedInt'), value: val });
-
-  // Penanda aktif yang menyertai VLAN pada sebagian vendor.
-  const enable = path.replace(/X_ZTE-COM_VLANID$/, 'X_ZTE-COM_VLANEnable');
-  if (enable !== path && existsLike(k, enable)) {
-    out.push({ name: enable, type: 'xsd:boolean', value: 'true' });
-  }
-  const link = /^(.*\.X_[^.]*LinkConfig\.)VLANIDMark$/.exec(path);
-  if (link) {
-    const mode = `${link[1]}Mode`;
-    if (existsLike(k, mode)) out.push({ name: mode, type: typeFor(k, mode, 'xsd:unsignedInt'), value: '2' });
-  }
-  return { params: out, guessed };
-}
-
-function planService(k: Knowledge, conn: WanConn, service: string): Planned {
-  if (conn.serviceListPath) {
-    return { params: [{ name: conn.serviceListPath, type: 'xsd:string', value: service }], guessed: [] };
-  }
-  const cands = Object.values(CONN_SERVICE).map((n) => `${conn.base}${n}`);
-  const found = cands.find((c) => existsLike(k, c) && !k.invalid.has(c));
-  if (found) return { params: [{ name: found, type: 'xsd:string', value: service }], guessed: [] };
-  const g = `${conn.base}${CONN_SERVICE[familyOf(k)]}`;
-  return { params: [{ name: g, type: 'xsd:string', value: service }], guessed: [g] };
+  return out;
 }
 
 /* ------------------------------------------------------------------ *
@@ -272,13 +262,13 @@ function planService(k: Knowledge, conn: WanConn, service: string): Planned {
 
 function queueWrite(
   ctx: CwmpContext, db: Database, deviceId: string, rep: ConfigReport,
-  params: ParamValue[], label: string, prefix: string,
+  params: ParamValue[], label: string, prefix: string, rediscover = false,
 ): void {
   if (!params.length) return;
   const key = `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   // id task = ParameterKey yang ikut dikirim ke perangkat, sehingga
   // SetParameterValuesResponse/Fault bisa langsung menutup task ini.
-  db.createTask(key, deviceId, 'write', { params, label }, WRITE_TTL_MS);
+  db.createTask(key, deviceId, 'write', { params, label, rediscover }, WRITE_TTL_MS);
   enqueueWrite(ctx, deviceId, params, key);
   rep.queued++;
   rep.tasks.push(key);
@@ -396,16 +386,17 @@ function applyPppoe(ctx: CwmpContext, db: Database, deviceId: string, k: Knowled
 
   const v = vlan(req.vlanId);
   if (req.vlanId !== undefined && req.vlanId !== '' && v === null) rep.skipped.push('VLAN harus 1..4094');
-  if (v !== null) {
-    const pv = planVlan(k, conn, v);
-    if (pv.note) rep.skipped.push(pv.note);
-    rep.guessed.push(...pv.guessed);
-    queueWrite(ctx, db, deviceId, rep, pv.params, `VLAN ${v}`, 'cfg_vlan');
-  }
-  if (req.serviceName) {
-    const ps = planService(k, conn, str(req.serviceName, 64));
-    rep.guessed.push(...ps.guessed);
-    queueWrite(ctx, db, deviceId, rep, ps.params, 'Service list', 'cfg_svc');
+  if (v !== null) queueWrite(ctx, db, deviceId, rep, vlanWrites(k, conn, v, rep), `VLAN ${v}`, 'cfg_vlan');
+  if (req.serviceName && k.model !== 'TR-181') {
+    const sv = conn.serviceListPath
+      ? { fill: { name: conn.serviceListPath.slice(conn.base.length), type: 'xsd:string' as XsdType, value: '' }, guessed: false }
+      : vendorService(evidence(k), conn.base, '');
+    if (sv.fill) {
+      if (sv.guessed) rep.guessed.push(sv.fill.name);
+      queueWrite(ctx, db, deviceId, rep,
+        [{ name: `${conn.base}${sv.fill.name}`, type: 'xsd:string', value: str(req.serviceName, 64) }],
+        'Service list', 'cfg_svc');
+    }
   }
   if (!rep.queued) rep.skipped.push('tidak ada perubahan PPPoE yang valid');
 }
@@ -415,127 +406,165 @@ function applyVlan(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledg
   if (v === null) { rep.skipped.push('VLAN harus 1..4094'); return; }
   const conn = resolveConn(k, req.target);
   if (!conn) { rep.skipped.push('Tidak ada koneksi WAN terdeteksi'); return; }
-  const pv = planVlan(k, conn, v);
-  if (pv.note) rep.skipped.push(pv.note);
-  rep.guessed.push(...pv.guessed);
-  queueWrite(ctx, db, deviceId, rep, pv.params, `VLAN ${v} ${conn.name ?? conn.base}`, 'cfg_vlan');
+  queueWrite(ctx, db, deviceId, rep, vlanWrites(k, conn, v, rep), `VLAN ${v} ${conn.name ?? conn.base}`, 'cfg_vlan');
 }
 
+function ports(v: unknown, max: number): number[] {
+  return Array.isArray(v)
+    ? [...new Set(v.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= max))].sort()
+    : [];
+}
+
+/**
+ * Buat atau isi WAN internet (PPPoE / IPoE) di lokasi pilihan operator.
+ *
+ * Urutan tulisan mengikuti pola yang terbukti stabil di lapangan
+ * (forum GenieACS 7385): parameter standar → parameter vendor (satu per
+ * SPV, supaya tebakan yang salah tidak menggagalkan yang lain) → Enable
+ * terakhir. Mode `sequential` memecah parameter standar juga satu per SPV.
+ */
 function applyWanAdd(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
+  const placement: WanPlacement = req.placement === 'wcd' || req.placement === 'existing' ? req.placement : 'new';
+  const existing = placement === 'existing' ? k.wan.find((c) => c.base === req.target) ?? null : null;
+  if (placement === 'existing' && !existing) { rep.skipped.push('Koneksi tujuan tidak ditemukan di perangkat'); return; }
+  const kind: 'ppp' | 'ip' = existing ? existing.kind : req.type === 'wan-add' ? 'ppp' : 'ip';
+
   if (k.model === 'TR-181') {
-    rep.skipped.push('Buat WAN otomatis belum didukung untuk perangkat TR-181 (butuh PPP.Interface + IP.Interface + VLANTermination). Gunakan tab Perintah → AddObject.');
+    if (existing && kind === 'ppp') { applyPppoe(ctx, db, deviceId, k, { ...req, target: existing.base }, rep); return; }
+    rep.skipped.push('Buat WAN baru belum didukung untuk perangkat TR-181 (butuh PPP.Interface + IP.Interface + VLANTermination). Pilih koneksi yang ada, atau gunakan tab Perintah → AddObject.');
     return;
   }
-  const isPppoe = req.type === 'wan-add';
   const v = vlan(req.vlanId);
   if (req.vlanId !== undefined && req.vlanId !== '' && v === null) { rep.skipped.push('VLAN harus 1..4094'); return; }
-  if (isPppoe && (!req.username || !req.password)) { rep.skipped.push('Username dan password PPPoE wajib diisi'); return; }
-  if (!isPppoe && req.staticIp && !IPV4.test(req.staticIp)) { rep.skipped.push('IP statis tidak valid'); return; }
+  const bridge = req.bridge === true;
+  if (kind === 'ppp' && !existing && (!req.username || !req.password)) { rep.skipped.push('Username dan password PPPoE wajib diisi'); return; }
+  if (kind === 'ppp' && existing && !existing.username && (!req.username || !req.password)) {
+    rep.skipped.push('Slot PPPoE ini masih kosong — username dan password wajib diisi'); return;
+  }
+  if (kind === 'ip' && req.staticIp && !IPV4.test(req.staticIp)) { rep.skipped.push('IP statis tidak valid'); return; }
 
-  // WANDevice tempat koneksi dibuat: yang sudah dipakai koneksi lain (GPON = 1).
   const wd = /^InternetGatewayDevice\.WANDevice\.(\d+)\./.exec(k.wan[0]?.base ?? '')?.[1] ?? '1';
   const wcdObj = `InternetGatewayDevice.WANDevice.${wd}.WANConnectionDevice.`;
-  const connObj = isPppoe ? 'WANPPPConnection.' : 'WANIPConnection.';
-  const fam = familyOf(k);
-  const bridge = req.bridge === true;
+  const connObj = kind === 'ppp' ? 'WANPPPConnection.' : 'WANIPConnection.';
+  let wcdBase: string;
+  if (existing) wcdBase = linkBase(existing.base)!;
+  else if (placement === 'wcd') {
+    const n = Number(req.wcd);
+    const known = extractWcds(db.getParams(deviceId)).find((w) => w.index === n);
+    if (!known) { rep.skipped.push(`WANConnectionDevice ${String(req.wcd)} tidak ditemukan di perangkat`); return; }
+    wcdBase = known.base;
+  } else wcdBase = `${wcdObj}1.`; // contoh bentuk untuk pencocokan bukti
+  const connBase = existing ? existing.base : `${wcdBase}${connObj}1.`;
 
-  // Parameter standar TR-098 — satu SPV.
-  const fills: { name: string; type: XsdType; value: string }[] = [
-    { name: 'Name', type: 'xsd:string', value: str(req.name || (isPppoe ? 'INTERNET' : 'WAN_IP'), 32) },
-  ];
-  if (isPppoe) {
-    fills.push(
-      { name: 'ConnectionType', type: 'xsd:string', value: bridge ? 'PPPoE_Bridged' : 'IP_Routed' },
-      { name: 'Username', type: 'xsd:string', value: str(req.username, 128) },
-      { name: 'Password', type: 'xsd:string', value: str(req.password, 128) },
-    );
-    if (!bridge) fills.push({ name: 'NATEnabled', type: 'xsd:boolean', value: 'true' });
-  } else {
-    fills.push({ name: 'ConnectionType', type: 'xsd:string', value: bridge ? 'IP_Bridged' : 'IP_Routed' });
-    if (!bridge) {
-      fills.push(
-        { name: 'AddressingType', type: 'xsd:string', value: req.staticIp ? 'Static' : 'DHCP' },
-        { name: 'NATEnabled', type: 'xsd:boolean', value: 'true' },
-      );
-      if (req.staticIp) {
-        const mask = req.netmask && IPV4.test(req.netmask) ? req.netmask : '255.255.255.0';
-        fills.push(
-          { name: 'ExternalIPAddress', type: 'xsd:string', value: req.staticIp },
-          { name: 'SubnetMask', type: 'xsd:string', value: mask },
-        );
-        if (req.gateway && IPV4.test(req.gateway)) fills.push({ name: 'DefaultGateway', type: 'xsd:string', value: req.gateway });
-        if (req.dns) fills.push({ name: 'DNSServers', type: 'xsd:string', value: str(req.dns, 64).replace(/\s+/g, '') });
-      }
-    }
-  }
-  fills.push({ name: 'Enable', type: 'xsd:boolean', value: 'true' });
+  const e = evidence(k);
+  const observed = observedConnTypes(k.wan)[kind];
+  // Slot yang sudah ada: ConnectionType dipertahankan kecuali operator
+  // memilihnya, mengubah mode route/bridge, atau slot belum dikonfigurasi.
+  let connectionType: string | null = chooseConnectionType(kind, bridge, observed, req.connectionType);
+  if (existing && !req.connectionType && existing.connectionType && existing.connectionType !== 'Unconfigured'
+    && /Bridged/i.test(existing.connectionType) === bridge) connectionType = null;
 
-  // Parameter vendor — VLAN & ServiceList. Pakai nama yang terbukti ada
-  // pada koneksi lain di perangkat ini; kalau belum ada, tebakan keluarga.
-  const vendorFills: { name: string; type: XsdType; value: string }[] = [];
-  const parentFills: { name: string; type: XsdType; value: string }[] = [];
-  const sample = `${wcdObj}1.${connObj}1.`;
+  const std = planStandard(e, connBase, {
+    kind, connectionType, bridge,
+    name: req.name ? str(req.name, 32) : existing ? undefined : (kind === 'ppp' ? 'INTERNET' : 'WAN_IP'),
+    username: req.username !== undefined ? str(req.username, 128) : undefined,
+    password: req.password !== undefined ? str(req.password, 128) : undefined,
+    staticIp: req.staticIp,
+    netmask: req.netmask && IPV4.test(req.netmask) ? req.netmask : undefined,
+    gateway: req.gateway && IPV4.test(req.gateway) ? req.gateway : undefined,
+    dns: req.dns ? str(req.dns, 64).replace(/\s+/g, '') : undefined,
+  });
+
+  const connVendor: Fill[] = [];
+  const linkVendor: Fill[] = [];
   if (v !== null) {
-    const connNames = ['X_HW_VLAN', 'X_ZTE-COM_VLANID', 'X_FH_VLANID', 'X_CMCC_VLANIDMark', 'X_CT-COM_VLANIDMark'];
-    const linkNames = ['X_CT-COM_WANGponLinkConfig', 'X_CMCC_WANGponLinkConfig', 'X_CU_WANGponLinkConfig', 'X_ZTE-COM_WANPONLinkConfig'];
-    const connHit = connNames.find((n) => existsLike(k, `${sample}${n}`));
-    const linkHit = linkNames.find((n) => existsLike(k, `${wcdObj}1.${n}.VLANIDMark`) || existsLike(k, `${wcdObj}1.${n}.VLANID`));
-    if (connHit) {
-      vendorFills.push({ name: connHit, type: typeFor(k, `${sample}${connHit}`, 'xsd:unsignedInt'), value: String(v) });
-      if (connHit === 'X_ZTE-COM_VLANID' && existsLike(k, `${sample}X_ZTE-COM_VLANEnable`)) {
-        vendorFills.unshift({ name: 'X_ZTE-COM_VLANEnable', type: 'xsd:boolean', value: 'true' });
-      }
-    } else if (linkHit) {
-      const leaf = existsLike(k, `${wcdObj}1.${linkHit}.VLANIDMark`) ? 'VLANIDMark' : 'VLANID';
-      parentFills.push({ name: `${linkHit}.${leaf}`, type: typeFor(k, `${wcdObj}1.${linkHit}.${leaf}`, 'xsd:unsignedInt'), value: String(v) });
-      if (existsLike(k, `${wcdObj}1.${linkHit}.Mode`)) parentFills.unshift({ name: `${linkHit}.Mode`, type: 'xsd:unsignedInt', value: '2' });
-      if (existsLike(k, `${wcdObj}1.${linkHit}.Enable`)) parentFills.unshift({ name: `${linkHit}.Enable`, type: 'xsd:boolean', value: 'true' });
-    } else if (CONN_VLAN[fam]) {
-      vendorFills.push({ name: CONN_VLAN[fam]!, type: 'xsd:unsignedInt', value: String(v) });
-      rep.guessed.push(`${connObj}N.${CONN_VLAN[fam]}`);
-    } else {
-      const lv = LINK_VLAN[fam]!;
-      parentFills.push(
-        { name: `${lv}.Enable`, type: 'xsd:boolean', value: 'true' },
-        { name: `${lv}.Mode`, type: 'xsd:unsignedInt', value: '2' },
-        { name: `${lv}.VLANIDMark`, type: 'xsd:unsignedInt', value: String(v) },
-      );
-      rep.guessed.push(`WANConnectionDevice.N.${lv}.VLANIDMark`);
-    }
+    const pv = vendorVlan(e, connBase, wcdBase, v);
+    if (pv.note) rep.skipped.push(pv.note);
+    rep.guessed.push(...pv.guessed);
+    connVendor.push(...pv.conn);
+    linkVendor.push(...pv.link);
   }
   if (!bridge || req.serviceName) {
-    const svc = str(req.serviceName || 'INTERNET', 64);
-    const svcHit = Object.values(CONN_SERVICE).find((n) => existsLike(k, `${sample}${n}`));
-    const svcName = svcHit ?? CONN_SERVICE[fam];
-    if (!svcHit) rep.guessed.push(`${connObj}N.${svcName}`);
-    vendorFills.push({ name: svcName, type: 'xsd:string', value: svc });
+    const sv = vendorService(e, connBase, str(req.serviceName || 'INTERNET', 64));
+    if (sv.fill) { connVendor.push(sv.fill); if (sv.guessed) rep.guessed.push(sv.fill.name); }
+  }
+  const bind = planBinding(e, connBase, ports(req.bindLan, 4), ports(req.bindSsid, 8));
+  if (bind.note) rep.skipped.push(bind.note);
+  if (bind.guessed && bind.fills.length) rep.guessed.push(bind.fills[0]!.name.replace(/\d+Enable$/, 'NEnable'));
+  connVendor.push(...bind.fills);
+  const extra = parseExtra(k, req.extra, `${wcdBase}${connObj}`, rep);
+  connVendor.push(...extra.rel);
+
+  const fam = familyOf(k);
+  const sequential = req.sequential ?? fam === 'cmcc';
+  const enableFill: Fill = { name: 'Enable', type: 'xsd:boolean', value: 'true' };
+  const what = kind === 'ppp' ? (bridge ? 'WAN PPPoE bridge' : 'WAN PPPoE') : (bridge ? 'WAN IPoE bridge' : 'WAN IPoE');
+  const label = `${existing ? 'Isi' : 'Buat'} ${what}${v !== null ? ` VLAN ${v}` : ''}`;
+
+  if (existing) {
+    // Isi slot yang ada: nonaktifkan dulu bila aktif, tulis, aktifkan lagi.
+    const base = existing.base;
+    if (/^(1|true)$/i.test(existing.enable ?? '')) {
+      queueWrite(ctx, db, deviceId, rep, [{ name: `${base}Enable`, type: 'xsd:boolean', value: 'false' }], `${label}: nonaktifkan sementara`, 'cfg_wan');
+    }
+    const stdP = prefixed(base, std);
+    if (sequential) stdP.forEach((p) => queueWrite(ctx, db, deviceId, rep, [p], `${label}: ${p.name.split('.').pop()}`, 'cfg_wan'));
+    else queueWrite(ctx, db, deviceId, rep, stdP, `${label}: parameter standar`, 'cfg_wan');
+    for (const p of [...prefixed(base, connVendor), ...prefixed(wcdBase, linkVendor), ...prefixed('', extra.abs)]) {
+      queueWrite(ctx, db, deviceId, rep, [p], `${label}: ${p.name.split('.').slice(-2).join('.')}`, 'cfg_wan');
+    }
+    queueWrite(ctx, db, deviceId, rep, prefixed(base, [enableFill]), `${label}: aktifkan`, 'cfg_wan', true);
+    rep.plan.unshift(`Lokasi: koneksi yang ada ${base} (WCD ${existing.wcd ?? '?'} · #${existing.instance}${existing.connectionType ? ` · ${existing.connectionType}` : ''})`);
+    return;
   }
 
-  const extra = parseExtra(k, req.extra, `${wcdObj}1.${connObj}`, rep);
-  vendorFills.push(...extra.rel);
-
-  // Rantai AddObject: WANConnectionDevice baru → koneksi di dalamnya.
-  // Pola ini yang dipakai ZTE/Huawei/FiberHome (satu WAN = satu WCD);
-  // menambah WANPPPConnection ke WCD.1 milik TR069 sering ditolak/bentrok.
   const key = `cfg_wan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  const label = `Buat ${isPppoe ? 'WAN PPPoE' : bridge ? 'WAN Bridge' : 'WAN IP'}${v !== null ? ` VLAN ${v}` : ''}`;
-  db.createTask(key, deviceId, 'add_object', {
-    objectName: wcdObj,
-    label,
-    absFills: extra.abs,
-    then: { objectName: connObj, fills, vendorFills, parentFills },
-  }, WRITE_TTL_MS);
-  enqueueAddObject(ctx, deviceId, wcdObj, key);
+  const common = { fills: std, vendorFills: connVendor, finalFills: [enableFill], sequential, label };
+  if (placement === 'wcd') {
+    // Koneksi baru di dalam WCD yang sudah ada; VLAN level link ditulis ke WCD itu.
+    const objectName = `${wcdBase}${connObj}`;
+    db.createTask(key, deviceId, 'add_object', {
+      objectName, ...common, absFills: [...extra.abs, ...prefixed(wcdBase, linkVendor)],
+    }, WRITE_TTL_MS);
+    enqueueAddObject(ctx, deviceId, objectName, key);
+    rep.plan.push(`Lokasi: WANConnectionDevice ${wcdBase.match(/\.(\d+)\.$/)?.[1]} yang ada → AddObject ${connObj}`);
+  } else {
+    // WCD baru → koneksi di dalamnya (satu WAN = satu WCD: pola ZTE/Huawei/FiberHome).
+    db.createTask(key, deviceId, 'add_object', {
+      objectName: wcdObj, label, absFills: extra.abs,
+      then: { objectName: connObj, ...common, parentFills: linkVendor },
+    }, WRITE_TTL_MS);
+    enqueueAddObject(ctx, deviceId, wcdObj, key);
+    rep.plan.push(`Lokasi: WANConnectionDevice baru → AddObject ${wcdObj} lalu ${connObj}`);
+  }
   rep.queued = 1;
   rep.tasks.push(key);
   rep.plan.push(
-    `AddObject ${wcdObj} → AddObject ${connObj} di instans baru`,
-    `SetParameterValues standar: ${fills.map((f) => f.name).join(', ')}`,
-    ...(vendorFills.length || parentFills.length
-      ? [`SetParameterValues vendor (terpisah): ${[...parentFills, ...vendorFills].map((f) => f.name).join(', ')}`]
+    `ConnectionType: ${connectionType}`,
+    `SetParameterValues standar${sequential ? ' (bertahap)' : ''}: ${std.map((f) => f.name).join(', ')}`,
+    ...(connVendor.length || linkVendor.length
+      ? [`SetParameterValues vendor (satu per SPV): ${[...linkVendor, ...connVendor].map((f) => f.name).join(', ')}`]
       : []),
-    'Struktur WAN dipetakan ulang otomatis setelah selesai',
+    'Enable=true terakhir, lalu struktur WAN dipetakan ulang otomatis',
   );
+}
+
+function applyWanEnable(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
+  const conn = typeof req.target === 'string' ? k.wan.find((c) => c.base === req.target) : undefined;
+  if (!conn) { rep.skipped.push('Koneksi tidak ditemukan di perangkat'); return; }
+  if (typeof req.enable !== 'boolean') { rep.skipped.push('Nilai enable wajib true/false'); return; }
+  queueWrite(ctx, db, deviceId, rep, [{ name: `${conn.base}Enable`, type: 'xsd:boolean', value: String(req.enable) }],
+    `${req.enable ? 'Aktifkan' : 'Nonaktifkan'} WAN ${conn.name ?? conn.base}`, 'cfg_wanen', true);
+}
+
+function applyInformInterval(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
+  const n = Number(req.informInterval);
+  if (!Number.isInteger(n) || n < 60 || n > 86400) { rep.skipped.push('Interval Inform harus 60..86400 detik'); return; }
+  const root = k.model === 'TR-181' ? 'Device.' : 'InternetGatewayDevice.';
+  queueWrite(ctx, db, deviceId, rep, [
+    { name: `${root}ManagementServer.PeriodicInformEnable`, type: 'xsd:boolean', value: 'true' },
+    { name: `${root}ManagementServer.PeriodicInformInterval`, type: typeFor(k, `${root}ManagementServer.PeriodicInformInterval`, 'xsd:unsignedInt'), value: String(n) },
+  ], `Interval Inform ${n} detik`, 'cfg_inform');
 }
 
 function applyWanDelete(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
@@ -571,6 +600,8 @@ export function applyConfig(
     case 'wan-add':
     case 'wan-ip-add': applyWanAdd(ctx, db, deviceId, k, req, rep); break;
     case 'wan-delete': applyWanDelete(ctx, db, deviceId, k, req, rep); break;
+    case 'wan-enable': applyWanEnable(ctx, db, deviceId, k, req, rep); break;
+    case 'inform-interval': applyInformInterval(ctx, db, deviceId, k, req, rep); break;
     default: rep.skipped.push(`jenis konfigurasi tidak dikenal: ${String(req.type)}`);
   }
   if (rep.guessed.length) {

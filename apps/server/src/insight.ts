@@ -150,7 +150,11 @@ export function extractOptical(params: ParamLike[]): OpticalInfo {
     if (n.dbm !== null || n.los) { rx = n; rxSrc = c; if (!n.los) break; }
   }
   const txP = firstOptical(params, TX_LEAF);
-  const tempP = firstOptical(params, TEMP_LEAF);
+  // Suhu optik; bila ONU tidak melaporkannya, pakai sensor suhu perangkat
+  // standar (DeviceInfo.TemperatureStatus).
+  const tempP = firstOptical(params, TEMP_LEAF)
+    ?? params.find((p) => /DeviceInfo\.TemperatureStatus\.TemperatureSensor\.\d+\.Value$/.test(p.path) && p.value !== '')
+    ?? null;
   const voltP = firstOptical(params, VOLT_LEAF);
   const biasP = firstOptical(params, BIAS_LEAF);
   return {
@@ -454,20 +458,65 @@ export function extractGeneral(params: ParamLike[]): GeneralInfo {
   };
 }
 
+/** WANConnectionDevice yang ada di perangkat — kandidat lokasi WAN baru. */
+export interface WcdInfo {
+  index: number;
+  base: string;
+  /** Jumlah koneksi yang terlihat di WCD ini (0 = WCD kosong buatan OLT). */
+  conns: number;
+  /** VLAN level link (X_*_WAN*ponLinkConfig) bila ada. */
+  linkVlan: string | null;
+}
+
+export function extractWcds(params: ParamLike[]): WcdInfo[] {
+  const re = /^(InternetGatewayDevice\.WANDevice\.\d+\.WANConnectionDevice\.(\d+)\.)(.+)$/;
+  const map = new Map<string, WcdInfo & { _c: Set<string> }>();
+  for (const p of params) {
+    const m = re.exec(p.path);
+    if (!m) continue;
+    let w = map.get(m[1]!);
+    if (!w) { w = { index: Number(m[2]), base: m[1]!, conns: 0, linkVlan: null, _c: new Set() }; map.set(m[1]!, w); }
+    const c = /^(WAN(?:PPP|IP)Connection\.\d+)\./.exec(m[3]!);
+    if (c) w._c.add(c[1]!);
+    if (/^X_[^.]*(?:Link|LINK)Config\.(?:VLANIDMark|VLANID|VLANId)$/.test(m[3]!) && p.value !== '') w.linkVlan = p.value;
+  }
+  return [...map.values()]
+    .map(({ _c, ...w }) => ({ ...w, conns: _c.size }))
+    .sort((a, b) => a.index - b.index);
+}
+
+/**
+ * Nilai ConnectionType yang benar-benar dipakai perangkat ini, per jenis
+ * koneksi. Sebagian firmware (mis. FiberHome tertentu) memakai nilai di
+ * luar enum TR-098 seperti "PPPoE_Routed"; WAN baru harus memakai nilai
+ * yang sama agar diterima.
+ */
+export function observedConnTypes(conns: WanConn[]): { ppp: string[]; ip: string[] } {
+  const pick = (k: 'ppp' | 'ip') => [...new Set(conns
+    .filter((c) => c.kind === k && c.connectionType && c.connectionType !== 'Unconfigured')
+    .map((c) => c.connectionType!))];
+  return { ppp: pick('ppp'), ip: pick('ip') };
+}
+
 export interface DeviceInsight {
   dataModel: DataModel | null;
   optical: OpticalInfo;
   wan: WanConn[];
+  wcds: WcdInfo[];
+  connTypes: { ppp: string[]; ip: string[] };
   wlan: WlanInfo[];
   general: GeneralInfo;
 }
 
 export function buildInsight(params: ParamLike[], model?: DataModel | null): DeviceInsight {
   const dm = model ?? detectDataModel(params.map((p) => p.path));
+  const wan = extractWan(params, dm);
   return {
     dataModel: dm,
     optical: extractOptical(params),
-    wan: extractWan(params, dm),
+    wan,
+    wcds: dm === 'TR-181' ? [] : extractWcds(params),
+    connTypes: observedConnTypes(wan),
     wlan: extractWlan(params, dm),
     general: extractGeneral(params),
   };

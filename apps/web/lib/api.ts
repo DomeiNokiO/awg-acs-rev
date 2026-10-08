@@ -190,10 +190,20 @@ export interface WlanInfo {
   hasPassphrase: boolean;
 }
 
+export interface WcdInfo {
+  index: number;
+  base: string;
+  conns: number;
+  linkVlan: string | null;
+}
+
 export interface DeviceInsight {
   dataModel: 'TR-098' | 'TR-181' | null;
   optical: OpticalInfo;
   wan: WanConn[];
+  wcds: WcdInfo[];
+  /** ConnectionType yang dipakai perangkat (mis. "PPPoE_Routed"). */
+  connTypes: { ppp: string[]; ip: string[] };
   wlan: WlanInfo[];
   general: {
     model: string | null;

@@ -12,6 +12,58 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0b. WAN internet multi-vendor, perintah perangkat, beban ONU
+
+Diuji end-to-end dengan simulator ONU FiberHome (slot OLT `WCD · #1 ·
+PPPoE_Routed`), ZTE (WCD kosong), Huawei (binding port), CMCC (bertahap):
+semua lulus; tes unit 23/23.
+
+**WAN internet PPPoE / IPoE — pilihan lokasi**
+- `placement: existing` — isi/timpa slot yang ada, mis. FiberHome
+  `WCD 2 · #1 · PPPoE_Routed` yang disiapkan OLT: `Enable=false` → standar →
+  vendor → `Enable=true`; ConnectionType slot dipertahankan.
+- `placement: wcd` — koneksi baru di dalam WCD yang sudah ada (WCD kosong
+  buatan OLT kini terdeteksi lewat `WAN*ConnectionNumberOfEntries`).
+- `placement: new` — WCD baru → koneksi (seperti sebelumnya).
+- UI: daftar lokasi lengkap; default = slot kosong pertama di luar WCD 1;
+  tombol ⚙ per koneksi di Ringkasan membuka formulir untuk slot itu.
+
+**Pengetahuan vendor terpusat — `apps/server/src/vendorwan.ts`** (baru)
+- VLAN level koneksi & link: Huawei `X_HW_VLAN`; ZTE `X_ZTE-COM_VLANEnable` +
+  `X_ZTE-COM_VLANID` / `X_ZTE-COM_WANPONLinkConfig.VLANID`; FiberHome
+  `X_FH_VLANID` + `X_FH_WANGponLinkConfig.Mode=2/VLANID`; CMCC
+  `X_CMCC_VLANMode=2` + `X_CMCC_VLANIDMark` / `X_CMCC_WANGponLinkConfig`;
+  CT-COM / CU link config (GPON & EPON).
+- ServiceList per vendor; **binding port** Huawei `X_HW_LANBIND.LanN/SSIDN`
+  dan operator China/ZTE `X_*_LanInterface`.
+- Parameter standar opsional (`TransportType=PPPoE`, `ConnectionTrigger=AlwaysOn`,
+  `PPPAuthenticationProtocol=AUTO`) hanya ditulis bila ada di perangkat.
+- **ConnectionType** mengikuti nilai yang dipakai ONU (mis. `PPPoE_Routed`),
+  bisa dipilih manual.
+- Bukti vendor dari koneksi PPP berlaku untuk IP dan sebaliknya.
+- **Pengiriman bertahap** (satu parameter per SPV) — otomatis untuk CMCC
+  (forum 7385), opsional untuk lainnya. `Enable=true` selalu terakhir.
+
+**Perintah perangkat**
+- Tab Konfigurasi → Perangkat: Hubungi, Reboot, interval Inform, reset pabrik.
+- Reset pabrik: hanya admin + wajib mengetik serial number (API menolak tanpa
+  `confirm` yang cocok).
+- Aktif/nonaktif WAN (`wan-enable`) dari tabel Koneksi WAN.
+- Task reboot/reset kini ditutup saat ONU menjawab.
+
+**Beban ONU**
+- `PROFILE_VERSION` 3: ONU yang sudah terdaftar dipetakan ulang sekali agar leaf baru (WCD kosong, TransportType, binding) terbaca.
+- `ACS_MAX_RPC_PER_SESSION` (default 40): sesi diakhiri rapi setelah N RPC,
+  sisanya dilanjutkan pada Inform berikutnya. Pemetaan ONU berat terbagi ke
+  2–3 sesi (terukur: 40+40+25 RPC untuk FiberHome "sulit").
+- Prioritas antrean: tulis/AddObject/DeleteObject/Reboot/FactoryReset/Download
+  didahulukan dari pembacaan rutin.
+
+**Varian parameter tambahan**: `WANDevice.1.X_HW_GponInterfaceConfig.*`,
+`X_CU_GponInterfaceConfig.RXPower`, `WANDevice.1.WANPONInterfaceConfig.*`,
+suhu `DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value` (sumber:
+genieacs-panel `deviceParameterFallbacks.js`).
+
 ## 0a. Sesi CWMP — ONU yang "terdaftar tapi semua detail kosong"
 
 Gejala di lapangan: FiberHome HG6543C (firmware RP2872) dan sebagian ONU

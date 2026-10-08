@@ -135,7 +135,7 @@ Semua membutuhkan autentikasi kecuali `/api/health` dan `/api/login`.
 | POST | `/api/devices/:id/read` | `{paths:[...]}` — GET Value RPC (partial path berakhiran `.` diizinkan) |
 | POST | `/api/devices/:id/write` | `{values:{path: nilai}}` — SET Value RPC |
 | POST | `/api/devices/:id/reboot` | antrekan reboot |
-| POST | `/api/devices/:id/factory-reset` | antrekan reset pabrik |
+| POST | `/api/devices/:id/factory-reset` | **admin**, body `{"confirm":"<serial number>"}` — antrekan reset pabrik |
 | POST | `/api/devices/:id/discover` | petakan struktur parameter perangkat |
 | POST | `/api/devices/:id/download` | `{url, fileType}` — download firmware/config via ACS |
 | POST | `/api/devices/:id/add-object` | `{objectName, parameterKey?}` — AddObject CWMP (antrekan, instanceNumber dikembalikan saat Inform) |
@@ -154,9 +154,15 @@ perangkat; tebakan dilaporkan di `guessed`.
 | `wifi` | `wlanIndex`, `ssid?`, `passphrase?` (≥8), `wifiEnable?` | SPV SSID/sandi pada WLANConfiguration.N (TR-181: WiFi.SSID/AccessPoint) |
 | `pppoe` | `target?`, `username?`, `password?`, `vlanId?`, `serviceName?` | SPV kredensial; VLAN & ServiceList di SPV terpisah |
 | `vlan` | `target?`, `vlanId` | SPV VLAN (level koneksi `X_HW_VLAN`/`X_ZTE-COM_VLANID`/`X_FH_VLANID` atau level link `X_CT-COM_WANGponLinkConfig.VLANIDMark`) |
-| `wan-add` | `username`, `password`, `vlanId?`, `name?`, `bridge?`, `serviceName?`, `extra?` | AddObject WANConnectionDevice → AddObject WANPPPConnection → SPV standar + SPV vendor; struktur WAN dipetakan ulang otomatis |
-| `wan-ip-add` | `staticIp?`, `netmask?`, `gateway?`, `dns?`, `vlanId?`, `bridge?` | sama, untuk WANIPConnection (DHCP bila tanpa `staticIp`) |
+| `wan-add` | `placement` (`new`/`wcd`/`existing`), `target?` (existing), `wcd?` (wcd), `username`, `password`, `vlanId?`, `name?`, `bridge?`, `connectionType?`, `serviceName?`, `bindLan?` [1-4], `bindSsid?` [1-8], `sequential?`, `extra?` | WAN internet PPPoE: WCD baru, di dalam WCD yang ada, atau isi slot yang ada (mis. `WCD 2 · #1 · PPPoE_Routed`); SPV standar → SPV vendor satu per satu → `Enable=true`; struktur WAN dipetakan ulang |
+| `wan-ip-add` | sama, plus `staticIp?`, `netmask?`, `gateway?`, `dns?` | WAN internet IPoE (DHCP bila tanpa `staticIp`) atau bridge |
 | `wan-delete` | `target` | DeleteObject koneksi (atau WCD-nya bila satu-satunya koneksi) |
+| `wan-enable` | `target`, `enable` | aktif/nonaktifkan koneksi WAN |
+| `inform-interval` | `informInterval` (60–86400 detik) | `PeriodicInformEnable=true` + `PeriodicInformInterval` |
+
+`GET /api/devices/:id` → `insight.wcds[]` (WCD yang ada, termasuk kosong) dan
+`insight.connTypes` (ConnectionType yang dipakai perangkat) untuk menyusun
+pilihan lokasi WAN.
 
 Respons: `{queued, plan[], skipped[], guessed[], tasks[], writes[]}`; HTTP 400 + `error` bila tidak ada yang diantrekan.
 
