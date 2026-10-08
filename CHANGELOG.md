@@ -12,6 +12,17 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0c. `deploy/update.sh` — update aman di CT
+
+- Update ke commit terbaru tanpa install ulang: `npm ci` dan build UI hanya
+  bila file terkait berubah (update dokumen/server ±1 menit, bukan 5–10).
+- Backup database sebelum restart (5 terakhir di `data/backup/`).
+- Health check; gagal → **rollback otomatis** ke commit lama.
+- `--check` (lihat perubahan), `--rollback` (kembali ke versi sebelumnya),
+  `--force` (build ulang penuh). Aman dijalankan lewat `curl | bash` dan
+  walau file script sendiri ikut diperbarui oleh `git reset`.
+- Installer kini menyebut `update.sh` di ringkasan akhir.
+
 ## 0b. WAN internet multi-vendor, perintah perangkat, beban ONU
 
 Diuji end-to-end dengan simulator ONU FiberHome (slot OLT `WCD · #1 ·

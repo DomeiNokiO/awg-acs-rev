@@ -89,8 +89,31 @@ Cara pakai di dalam CT (sebagai root):
 curl -fsSL https://raw.githubusercontent.com/DomeiNokiO/awg-acs-rev/main/deploy/install.sh | bash
 ```
 
-Jalankan perintah yang sama untuk **update** — database, `.env`, dan sertifikat
-TLS dipertahankan, akun admin tidak diubah.
+### Update ke commit terbaru
+
+```bash
+bash /opt/acs/deploy/update.sh            # update
+bash /opt/acs/deploy/update.sh --check    # hanya cek ada update + daftar perubahan
+bash /opt/acs/deploy/update.sh --rollback # kembali ke versi sebelum update terakhir
+bash /opt/acs/deploy/update.sh --force    # paksa npm ci + build UI ulang
+```
+
+Atau tanpa file lokal: `curl -fsSL https://raw.githubusercontent.com/DomeiNokiO/awg-acs-rev/main/deploy/update.sh | bash`.
+
+Yang dilakukan `update.sh`:
+
+1. `git fetch`, tampilkan commit terpasang → terbaru dan daftar perubahannya.
+2. `npm ci` **hanya** bila `package.json`/`package-lock.json` berubah; build UI
+   **hanya** bila `apps/web/` berubah — build berjalan selagi ACS tetap
+   melayani ONU, jadi downtime hanya beberapa detik saat restart.
+3. Stop layanan → **backup database** ke `/opt/acs/data/backup/` (5 terakhir
+   disimpan) → start.
+4. Health check `/api/health`; bila gagal, **rollback otomatis** ke commit
+   lama dan layanan dijalankan kembali.
+
+Database, `.env`, dan sertifikat TLS tidak disentuh; migrasi skema berjalan
+otomatis saat ACS start. Log: `/var/log/acs-update.log`. Menjalankan ulang
+installer juga bisa dipakai untuk update (selalu `npm ci` + build penuh).
 
 Apa yang dilakukan:
 

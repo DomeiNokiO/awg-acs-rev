@@ -476,6 +476,6 @@ else
     info "Log      : $DATA_DIR/acs.log"
 fi
 info "Konfig   : $ENV_FILE (ubah lalu restart layanan)"
-info "Update   : jalankan ulang perintah installer yang sama"
+info "Update   : bash $APP_DIR/deploy/update.sh   (cek dulu: --check, kembali: --rollback)"
 exit 0
 }
