@@ -139,6 +139,7 @@ Pemecahan masalah:
 | `curl: (22) ... 404` sesaat setelah push | Cache raw.githubusercontent.com belum segar — tunggu 1–2 menit |
 | `tr: write error: Broken pipe` lalu berhenti | Installer versi lama (pembuat password acak memicu SIGPIPE). Versi ini sudah diperbaiki |
 | `apt-get install gagal` dengan 404 di Debian 11 | Debian 11 EOL; pakai template Debian 12/13 |
+| ONU terdaftar tapi semua detail kosong | Sebelum revisi ini: ONU yang tidak mengirim cookie sesi (FiberHome dll.) tidak pernah menerima RPC. Update; untuk diagnosis set `ACS_CWMP_TRACE=1` di `/opt/acs/.env`, `systemctl restart acs`, lalu `journalctl -u acs -f` |
 | Build UI `Killed` / exit 137 | Kehabisan RAM. Installer sudah memakai mode hemat; bila RAM < 768 MB, naikkan RAM/swap CT |
 | Layanan gagal `226/NAMESPACE` | Unit lama dengan sandbox; jalankan ulang installer (unit ditulis ulang) atau aktifkan *nesting* CT |
 
@@ -155,6 +156,7 @@ Variabel lingkungan (waktu jalankan server):
 | `ACS_CWMP_TLS_CERT` / `ACS_CWMP_TLS_KEY` | — | TLS untuk CWMP (:7547) |
 | `ACS_API_TLS_CERT` / `ACS_API_TLS_KEY` | — | TLS untuk API/UI (:8080) |
 | `ACS_SESSION_TTL` | `8` (jam) | Masa berlaku sesi login |
+| `ACS_CWMP_TRACE` | `0` | `1` = catat alur RPC per ONU ke log (`journalctl -u acs`); `2` = juga isi SOAP (memuat kredensial — hanya untuk diagnosis) |
 | `ACS_BIND` | `0.0.0.0` | Bind address semua listener |
 
 ### Menunjuk ONT ke ACS
@@ -266,6 +268,8 @@ dan dicatat di log tugas; parameter barulah (mis.
 | PPPoE tidak tampil | Path dipatok `WANConnectionDevice.1`, padahal PPPoE ZTE/Huawei/FiberHome di WCD.2/.3 | Discovery per perangkat dengan instans asli; semua koneksi WAN tampil |
 | Ganti sandi WiFi gagal | Selalu menulis `BeaconType=WPA2PSK` (bukan enum TR-098) → SPV atomik ditolak | Sandi ke lokasi yang ada; BeaconType hanya diubah bila jaringan terbuka (`11i`) |
 | Tambah WAN tidak jalan | AddObject di WCD.1 milik TR069; VLAN satu nama vendor; tebakan vendor menggagalkan username/password | Rantai AddObject WCD → koneksi; SPV standar & vendor terpisah; VLAN level koneksi/link |
+| ONU terdaftar tapi semua detail kosong (FiberHome HG6543C, sebagian CMCC) | Sesi hanya dikenali lewat cookie; akhir sesi berupa amplop SOAP kosong; namespace selalu `cwmp-1-0` | Sesi dikenali lewat cookie/koneksi TCP/IP; akhir sesi HTTP 204; namespace mengikuti ONU; fallback GPN `NextLevel=true` |
+| Redaman CMCC (GM220-S) | Varian `X_CMCC_GponInterfaceConfig` belum lengkap, satuan 0.1 µW | Varian CMCC/Realtek/CT-COM EPON ditambahkan, dipilih per keluarga vendor |
 | Preset BOOT tak pernah jalan | Parser `Event` Inform selalu kosong | Parser `EventStruct/EventCode` diperbaiki |
 | "Pelajari struktur" error pada klik kedua | Task ber-id = deviceId (PRIMARY KEY bentrok) | Diperbaiki |
 | Task konfigurasi `pending` selamanya saat ditolak | Fault tidak dipetakan ke task | Task ditutup `failed` + alasan |

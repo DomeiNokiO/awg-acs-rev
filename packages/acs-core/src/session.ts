@@ -12,7 +12,7 @@
  * Setiap sesi terikat ke satu device (diambil dari DeviceId di Inform).
  */
 import {
-  parseEnvelope, buildEnvelope, emptyEnvelope, text, type ParsedEnvelope,
+  parseEnvelope, buildEnvelope, detectCwmpNs, CWMP_NS_DEFAULT, text, type ParsedEnvelope,
 } from './soap.ts';
 import {
   type Rpc, type ParamValue, parseCwmpFault,
@@ -94,7 +94,8 @@ export class CwmpSession {
   /** `Rpc.key` dari RPC terakhir — penghubung balasan/fault ke batch asal. */
   lastSentKey: string | null = null;
   private requestCounter = 0;
-  private emptyFromCpe = 0;
+  /** Namespace CWMP milik CPE (dari Inform) — dipakai untuk semua balasan. */
+  cwmpNs: string = CWMP_NS_DEFAULT;
   readonly createdAt = Date.now();
   lastSeen = Date.now();
 
@@ -157,6 +158,7 @@ export class CwmpSession {
     }
 
     if (parsed.method === 'Inform') {
+      this.cwmpNs = detectCwmpNs(xml) ?? CWMP_NS_DEFAULT;
       return this.handleInform(parsed);
     }
 
@@ -165,7 +167,7 @@ export class CwmpSession {
       // Inform belum pernah datang — sesi tidak sah.
       this.state = 'fault';
       return {
-        responseXml: buildEnvelope(parsed.id ?? '0', this.faultXml(9012, 'Inform tidak ditemukan')),
+        responseXml: this.env(parsed.id ?? '0', this.faultXml(9012, 'Inform tidak ditemukan')),
         status: 500, done: true, error: 'RPC sebelum Inform',
       };
     }
@@ -195,7 +197,7 @@ export class CwmpSession {
     if (!identity.serialNumber || !identity.oui) {
       this.state = 'fault';
       return {
-        responseXml: buildEnvelope(parsed.id ?? '0', this.faultXml(9015, 'DeviceId tidak lengkap')),
+        responseXml: this.env(parsed.id ?? '0', this.faultXml(9015, 'DeviceId tidak lengkap')),
         status: 400, done: true, error: 'DeviceId tidak lengkap',
       };
     }
@@ -224,7 +226,6 @@ export class CwmpSession {
 
     this.identity = identity;
     this.state = 'in_session';
-    this.emptyFromCpe = 0;
 
     const inform: InformInfo = {
       identity,
@@ -239,7 +240,7 @@ export class CwmpSession {
     // InformResponse wajib dikirim dulu; RPC baru di POST berikutnya.
     const acsId = this.newRequestId();
     return {
-      responseXml: buildEnvelope(parsed.id ?? acsId, '<cwmp:InformResponse><MaxEnvelopes>1</MaxEnvelopes></cwmp:InformResponse>'),
+      responseXml: this.env(parsed.id ?? acsId, '<cwmp:InformResponse><MaxEnvelopes>1</MaxEnvelopes></cwmp:InformResponse>'),
       status: 200,
       inform,
       done: false,
@@ -335,7 +336,7 @@ export class CwmpSession {
           faultString: r.faultString, completeTime: r.completeTime, fileSize: r.fileSize,
         };
         // TransferComplete harus dibalas TransferCompleteResponse, bukan RPC baru.
-        this.pendingResponseOverride = buildEnvelope(parsed.id ?? this.newRequestId(), emptyElXml('TransferCompleteResponse'));
+        this.pendingResponseOverride = this.env(parsed.id ?? this.newRequestId(), emptyElXml('TransferCompleteResponse'));
         return out;
       }
       default:
@@ -363,8 +364,11 @@ export class CwmpSession {
     }
 
     if (!this.identity) {
+      // POST tanpa Inform di sesi ini (biasanya CPE tidak mengirim balik
+      // cookie dan sesinya tak bisa dikenali). Akhiri dengan rapi; CPE akan
+      // membuka sesi baru pada Inform berikutnya.
       this.state = 'fault';
-      return { responseXml: emptyEnvelope('0'), status: 400, done: true, error: 'tanpa identitas' };
+      return { responseXml: '', status: 204, done: true, error: 'tanpa identitas' };
     }
 
     const rpc = this.hooks.dequeue(this.identity);
@@ -377,17 +381,19 @@ export class CwmpSession {
         '',
       )}</cwmp:${rpc.method}>`;
       this.acsRequestId = this.newRequestId();
-      return { responseXml: buildEnvelope(this.acsRequestId, rpc.xml), status: 200, done: false };
+      return { responseXml: this.env(this.acsRequestId, rpc.xml), status: 200, done: false };
     }
 
-    // Tidak ada antrean. Kalau CPE juga kosong dua kali berturut-turut, tutup.
-    this.emptyFromCpe++;
-    if (this.emptyFromCpe >= 2) {
-      this.state = 'finished';
-      return { responseXml: emptyEnvelope(this.newRequestId()), status: 200, done: true };
-    }
-    // Beri satu kesempatan: balas kosong, biarkan CPE POST lagi.
-    return { responseXml: emptyEnvelope(this.newRequestId()), status: 200, done: false };
+    // Tidak ada RPC lagi: TR-069 mewajibkan respons HTTP KOSONG (204) untuk
+    // mengakhiri sesi. Amplop SOAP dengan <Body/> kosong (perilaku lama)
+    // bukan sinyal akhir sesi — firmware ketat membalasnya dengan Fault
+    // atau memutus koneksi dan menganggap sesi gagal.
+    this.state = 'finished';
+    return { responseXml: '', status: 204, done: true };
+  }
+
+  private env(id: string, body: string): string {
+    return buildEnvelope(id, body, this.cwmpNs);
   }
 
   private newRequestId(): string {

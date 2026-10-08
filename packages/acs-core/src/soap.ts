@@ -172,18 +172,32 @@ const builder = new XMLBuilder({
   suppressEmptyNode: true,
 });
 
-export const ENVELOPE_ATTRS =
+export const CWMP_NS_DEFAULT = 'urn:dslforum-org:cwmp-1-0';
+
+const envelopeAttrs = (cwmpNs: string): string =>
   'xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/" ' +
   'xmlns:soap-enc="http://schemas.xmlsoap.org/soap/encoding/" ' +
   'xmlns:xsd="http://www.w3.org/2001/XMLSchema" ' +
   'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
-  'xmlns:cwmp="urn:dslforum-org:cwmp-1-0"';
+  `xmlns:cwmp="${cwmpNs}"`;
 
-/** Rakit envelope lengkap dengan header cwmp:ID. */
-export function buildEnvelope(id: string, bodyXml: string): string {
+export const ENVELOPE_ATTRS = envelopeAttrs(CWMP_NS_DEFAULT);
+
+/** Namespace CWMP yang dipakai CPE di envelope-nya (cwmp-1-0 … cwmp-1-4). */
+export function detectCwmpNs(xml: string): string | null {
+  const m = /urn:dslforum-org:cwmp-1-\d/.exec(xml);
+  return m ? m[0] : null;
+}
+
+/**
+ * Rakit envelope lengkap dengan header cwmp:ID. `cwmpNs` mengikuti versi
+ * yang dipakai CPE di Inform-nya — sebagian firmware (FiberHome, CMCC)
+ * menolak RPC berbalut namespace versi lain.
+ */
+export function buildEnvelope(id: string, bodyXml: string, cwmpNs: string = CWMP_NS_DEFAULT): string {
   return (
     '<?xml version="1.0" encoding="UTF-8"?>' +
-    `<soap-env:Envelope ${ENVELOPE_ATTRS}>` +
+    `<soap-env:Envelope ${envelopeAttrs(cwmpNs)}>` +
     `<soap-env:Header><cwmp:ID soap-env:mustUnderstand="1">${escapeXml(id)}</cwmp:ID></soap-env:Header>` +
     `<soap-env:Body>${bodyXml}</soap-env:Body>` +
     '</soap-env:Envelope>'

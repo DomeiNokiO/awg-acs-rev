@@ -12,6 +12,35 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0a. Sesi CWMP — ONU yang "terdaftar tapi semua detail kosong"
+
+Gejala di lapangan: FiberHome HG6543C (firmware RP2872) dan sebagian ONU
+CMCC tercatat Inform, tetapi tidak satu pun parameter terbaca. Diuji ulang
+dengan simulator ONU yang meniru perilaku firmware ketat: **kode sebelumnya
+mengirim 0 RPC** ke ONU tersebut; kode ini membaca redaman, PPPoE, WAN, dan
+WiFi-nya lengkap.
+
+| Masalah | Penyebab | Perbaikan |
+|---------|----------|-----------|
+| Tidak ada RPC sama sekali | Sesi hanya dikenali lewat cookie `acs_session`. ONU yang tidak menyimpan cookie (atau gagal memparse atribut `SameSite`/`HttpOnly`/`Max-Age`) memulai sesi baru di setiap POST, sehingga antrean baca tidak pernah terkirim | Sesi dikenali lewat cookie → koneksi TCP yang sama → IP (hanya bila satu sesi aktif di IP itu, < 2 menit). Cookie disederhanakan menjadi `acs_session=<id>; Path=/`. Peristiwa "CPE tidak mengirim cookie sesi" dicatat sekali per sesi |
+| Sesi diakhiri dengan cara yang salah | ACS membalas amplop SOAP berisi `<Body/>` kosong (HTTP 200) | TR-069: respons HTTP **kosong 204** mengakhiri sesi |
+| RPC ditolak firmware yang memakai CWMP 1.2+ | Balasan selalu `urn:dslforum-org:cwmp-1-0` | Namespace mengikuti versi di Inform ONU (`cwmp-1-0` … `cwmp-1-4`) |
+| 415 dari Fastify | Parser body hanya menerima `text/xml`/`application/xml` | Port CWMP menerima Content-Type apa pun |
+| Struktur ONU tak terpetakan | Sebagian firmware menolak `GetParameterNames` dengan `NextLevel=false` | Root yang ditolak dicoba ulang dengan `NextLevel=true` dan ditelusuri bertingkat (maks. 150 subtree); perangkat diingat "mode bertingkat" |
+| Sesi menumpuk di memori | Sesi yang ditinggal CPE tidak pernah dibuang | Sesi idle > 10 menit dibersihkan |
+| Sulit didiagnosis | Tidak ada log alur RPC | `ACS_CWMP_TRACE=1` (alur RPC per ONU) / `=2` (+ isi SOAP) |
+
+Varian redaman baru dan pemilihan per keluarga vendor (`modelpaths.ts`):
+
+- **CMCC / China Mobile (GM220-S dll.)**: `WANDevice.1.X_CMCC_GponInterfaceConfig.{RXPower,TXPower,TransceiverTemperature,SupplyVottage,BiasCurrent}`, `X_CMCC_EponInterfaceConfig.*` — satuan 0.1 µW / 1/256 °C dinormalisasi otomatis. VLAN di `WANConnectionDevice.N.X_CMCC_WANGponLinkConfig.VLANIDMark` (+ `Mode=2`), ServiceList `X_CMCC_ServiceList`.
+- **FiberHome**: `X_FH_GponInterfaceConfig.*`, plus `X_CT-COM_`/`X_CMCC_GponInterfaceConfig` untuk firmware operator; VLAN `X_FH_VLANID`, ServiceList `X_FH_ServiceList`.
+- **ZTE lama / EPON**: `InternetGatewayDevice.X_CT-COM_EponInterfaceConfig.Stats.*`; **Realtek EPON**: `InternetGatewayDevice.X_Realtek_EponInterfaceConfig.Stats.*`; **Nokia**: `WANDevice.1.X_ALU-COM_GponInterfaceConfig.RXPower`; **TR-181**: `Device.Optical.Interface.1.Stats.{RxPower,TxPower}`.
+- Keluarga vendor ditebak dari Manufacturer/OUI/ProductClass (firmware operator sering melapor "CMCC" sebagai pabrikan). Kandidat keluarga itu dicoba lebih dulu — lebih sedikit RPC split-on-fault pada ONU yang menolak discovery — dan bila semuanya ditolak, otomatis melebar ke seluruh varian.
+- Modul konfigurasi mengenali keluarga `cmcc`/`cu` untuk tebakan VLAN/ServiceList.
+
+Lain-lain: UI tidak tersaji bila folder instalasi mengandung spasi
+(`URL.pathname` → `%20`) — diganti `fileURLToPath`.
+
 ## 0. Installer (`deploy/install.sh`) — CT Proxmox Ubuntu/Debian
 
 Diuji di container dengan batas RAM **1 GB**: Ubuntu 22.04, Ubuntu 24.04,

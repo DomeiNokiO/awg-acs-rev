@@ -29,6 +29,18 @@ Riwayat perubahan rinci: [CHANGELOG.md](../CHANGELOG.md).
 
 ---
 
+### Aturan sesi (kompatibilitas firmware ketat)
+
+- Sesi dikenali lewat cookie `acs_session` → koneksi TCP yang sama → IP
+  (hanya bila tepat satu sesi aktif di IP itu). ONU yang tidak menyimpan
+  cookie (FiberHome HG6543C dll.) tetap mendapat RPC; peristiwa
+  "CPE tidak mengirim cookie sesi" dicatat.
+- Akhir sesi = respons HTTP kosong **204**, bukan amplop SOAP kosong.
+- Namespace `cwmp-1-x` di balasan mengikuti versi Inform ONU.
+- Body CWMP diterima dengan Content-Type apa pun.
+- Diagnosis: `ACS_CWMP_TRACE=1` di `.env` → `journalctl -u acs -f` menampilkan
+  `[cwmp] <device> sesi=… via=cookie|koneksi|ip ← Inform [1 BOOT] ns=1-2 → InformResponse`.
+
 ## 2. Alur pembacaan
 
 ```
@@ -61,6 +73,9 @@ kolom ini — tidak perlu memindai tabel `params`.
 
 - Root yang ditolak (Fault apa pun) → `discovery_root_failed`, lanjut ke root berikutnya.
 - Root yang tidak dijawab 3× (perangkat memutus sesi) → dilewati.
+- Root yang ditolak dengan `NextLevel=false` dicoba ulang **sekali** dengan
+  `NextLevel=true`. Bila berhasil, perangkat ditandai mode bertingkat dan
+  subtree berikutnya ditelusuri per tingkat (maks. 150 subtree antre).
 - **Firmware dangkal**: bila balasan `NextLevel=false` hanya berisi anak
   langsung (tak satu pun nama lebih dalam dari satu tingkat), ACS beralih ke
   **mode BFS** — objek anak ditelusuri satu per satu, kecuali tabel besar
@@ -98,7 +113,16 @@ Selalu ikut dibaca — terutama untuk redaman yang berada **di luar** root disco
 | Nokia / Alcatel-Lucent | `InternetGatewayDevice.X_ALU_OntOpticalParam.RXPower` |
 | CT-COM / CMCC / CU | `WANDevice.1.X_CT-COM_*`, `X_CMCC_*`, `X_CU_WANEPONInterfaceConfig.OpticalTransceiver.RXPower` |
 | EPON standar | `WANDevice.1.WANEponInterfaceConfig.RXPower` |
+| China Mobile (GM220-S dll.) | `WANDevice.1.X_CMCC_GponInterfaceConfig.RXPower` (+ `TXPower`, `TransceiverTemperature`, `SupplyVottage`, `BiasCurrent`), `X_CMCC_EponInterfaceConfig.RXPower` |
+| ZTE lama EPON | `InternetGatewayDevice.X_CT-COM_EponInterfaceConfig.Stats.RxPower` |
+| ONU berbasis Realtek (EPON) | `InternetGatewayDevice.X_Realtek_EponInterfaceConfig.Stats.RxPower` |
+| Nokia (varian) | `WANDevice.1.X_ALU-COM_GponInterfaceConfig.RXPower` |
 | TR-181 | `Device.Optical.Interface.1.OpticalSignalLevel` / `TransmitOpticalLevel` |
+| TR-181 (varian) | `Device.Optical.Interface.1.Stats.RxPower` / `TxPower` |
+
+Kandidat dipilih **per keluarga vendor** (FiberHome, ZTE, Huawei, Nokia,
+CMCC/operator China) berdasarkan Manufacturer/OUI/ProductClass; bila semua
+kandidat keluarganya ditolak perangkat, seluruh varian dicoba.
 
 Varian yang tidak ada di perangkat ditandai `invalid_param` (langsung dari
 hasil discovery, atau lewat split-on-fault) dan tidak dikirim lagi.

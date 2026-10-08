@@ -166,6 +166,9 @@ function familyOf(k: Knowledge): Family {
   if (/huawei/.test(m) || ['00E0FC', '4C1FCC', '00259E', '001882', 'E0247F'].includes(k.oui)) return 'huawei';
   if (/zte/.test(m) || ['001141', '00D0D0', 'D0608C', '344B50'].includes(k.oui)) return 'zte';
   if (/fiberhome|fiber home/.test(m) || ['0019E0', '241815'].includes(k.oui)) return 'fiberhome';
+  // Firmware China Mobile (GM220-S dll.) melaporkan operator sebagai pabrikan.
+  if (/cmcc|china ?mobile|chinamobile/.test(m)) return 'cmcc';
+  if (/unicom|cucc/.test(m)) return 'cu';
   return 'ct';
 }
 

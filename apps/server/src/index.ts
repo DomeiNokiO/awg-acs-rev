@@ -23,6 +23,7 @@ import { loadCredentials } from './cwmp-auth.ts';
 import { access } from 'node:fs/promises';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 
 const DB_FILE = process.env['ACS_DB'] ?? '/root/acs/data/acs.db';
@@ -186,7 +187,9 @@ async function main(): Promise<void> {
   registerApiRoutes(api, db, ctx, webhooks);
 
   // Static file UI bila sudah di-build (produksi: satu proses saja).
-  const dist = new URL('../../web/out/', import.meta.url).pathname;
+  // fileURLToPath, bukan URL.pathname: pathname meng-encode spasi (%20)
+  // sehingga folder instalasi berisi spasi tidak pernah ditemukan.
+  const dist = fileURLToPath(new URL('../../web/out/', import.meta.url));
   if (await pathExists(dist)) {
     // Dynamic import menghasilkan namespace { default }; pakai .default
     // supaya cocok dengan tipe FastifyPluginAsync.

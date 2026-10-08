@@ -116,12 +116,21 @@ test('balasan GetParameterValues dicatat, lalu sesi ditutup bersih', () => {
     assert.equal(r.errors.length, 0);
   }
 
-  // antrean habis -> envelope kosong pertama
-  const p1 = session.handle('');
-  assert.match(p1.responseXml, /soap-env:Body\/>|<soap-env:Body><\/soap-env:Body>/);
-  // kedua kosong -> selesai
-  const p2 = session.handle('');
-  assert.equal(p2.done, true, 'sesi harus selesai setelah dua kosong berturut-turut');
+  // Antrean habis -> TR-069: respons HTTP kosong (204) mengakhiri sesi.
+  // Amplop SOAP berisi <Body/> kosong BUKAN sinyal akhir sesi.
+  assert.equal(out.status, 204);
+  assert.equal(out.responseXml, '');
+  assert.equal(out.done, true);
+});
+
+test('namespace CWMP mengikuti versi yang dipakai CPE di Inform', () => {
+  const gpv = buildGetParameterValues('t9', ['InternetGatewayDevice.DeviceInfo.SoftwareVersion']);
+  const { session } = makeSession([gpv]);
+  const informOut = session.handle(INFORM.replace(/cwmp-1-0/g, 'cwmp-1-2'));
+  assert.match(informOut.responseXml, /xmlns:cwmp="urn:dslforum-org:cwmp-1-2"/);
+  const rpc = session.handle('');
+  assert.match(rpc.responseXml, /xmlns:cwmp="urn:dslforum-org:cwmp-1-2"/);
+  assert.match(rpc.responseXml, /GetParameterValues/);
 });
 
 test('SetParameterValues dari antrean terkirim dengan tipe yang benar', () => {
@@ -177,7 +186,8 @@ test('Fault dari CPE diteruskan sebagai hasil, bukan membuat sesi crash', () => 
     assert.match(r.message, /^Invalid parameter value/);
     assert.match(r.message, /SetParameterValues/);
   }
-  assert.equal(out.status, 200, 'fault tidak boleh mengubah status HTTP');
+  // Fault diproses tanpa crash; antrean kosong -> sesi diakhiri rapi (204).
+  assert.equal(out.status, 204);
 });
 
 test('Inform tanpa SerialNumber ditolak dengan fault 9015', () => {

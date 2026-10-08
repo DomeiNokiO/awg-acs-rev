@@ -15,7 +15,7 @@ import {
 import type { Database } from '@acs/core';
 import { checkCwmpAuth, type CwmpCredential } from './cwmp-auth.ts';
 import { discoveryRoots, wanRoots, profileFromNodes, MAX_PROFILE_PATHS } from './profiler.ts';
-import { essentialPaths } from './modelpaths.ts';
+import { essentialPaths, opticalCandidates, opticalFamily } from './modelpaths.ts';
 import { buildInsight, detectDataModel, summaryFields, type DataModel } from './insight.ts';
 
 /** Ukuran maksimum body SOAP — 1 MB. Lebih dari itu kemungkinan bukan CPE. */
@@ -34,6 +34,14 @@ export const PROFILE_VERSION = 2;
  */
 const SKIP_SUBTREE = /\.(?:PortMapping|Stats|Hosts|AssociatedDevice|WPS|WEPKey|DHCPOption|DHCPStaticAddress|IPv6[^.]*|X_[^.]*(?:Statistics|Stats|Log|Diagnostic)[^.]*)\.$/;
 
+/**
+ * Awalan entri antrean discovery untuk GetParameterNames NextLevel=true
+ * (mode dangkal) — dipakai untuk firmware yang menolak NextLevel=false.
+ */
+const SHALLOW = 'next:';
+/** Batas antrean penelusuran bertingkat per perangkat. */
+const MAX_BFS_QUEUE = 150;
+
 /** GPN yang tidak pernah dijawab sebanyak ini dianggap gagal dan dilewati. */
 const MAX_DISCOVERY_TRIES = 3;
 
@@ -41,6 +49,11 @@ interface SessionEntry {
   session: CwmpSession;
   identity: DeviceIdentity | null;
   createdAt: number;
+  /** IP CPE — untuk menebak sesi CPE yang tidak mengirim cookie. */
+  ip: string;
+  /** CPE pernah mengirim cookie sesi ini. */
+  viaCookie: boolean;
+  noCookieLogged: boolean;
 }
 
 export interface CwmpContext {
@@ -76,50 +89,108 @@ export function parseCookies(header: string | undefined): Record<string, string>
   return out;
 }
 
+/** Nama method SOAP pertama di dalam <Body> (untuk trace & deteksi Inform). */
+function soapMethod(xml: string): string {
+  if (!xml.trim()) return '(kosong)';
+  const m = /<(?:[\w-]+:)?Body[^>]*>\s*<(?:[\w-]+:)?([A-Za-z]+)/.exec(xml);
+  return m ? m[1]! : '(tak dikenal)';
+}
+
+/**
+ * ACS_CWMP_TRACE=1 mencatat alur RPC per perangkat ke log (journalctl);
+ * =2 juga menyertakan isi SOAP (dipotong 4 KB). Isi SOAP bisa memuat
+ * kredensial PPPoE/WiFi — aktifkan hanya saat diagnosis.
+ */
+const TRACE = Number(process.env['ACS_CWMP_TRACE'] ?? 0);
+
+/** Sesi tanpa aktivitas selama ini dibuang dari memori. */
+const SESSION_IDLE_MS = 10 * 60 * 1000;
+/** Batas waktu menebak sesi lewat IP untuk CPE tanpa cookie. */
+const IP_FALLBACK_MS = 2 * 60 * 1000;
+
 export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void {
-  // Body SOAP dibaca manual: Fastify tidak lagi memakai content-type parser
-  // bawaan, dan kita butuh kontrol penuh atas ukuran + charset.
-  app.addContentTypeParser(
-    ['text/xml', 'application/xml', 'text/xml; charset=utf-8', 'application/soap+xml'],
-    { parseAs: 'string', bodyLimit: MAX_BODY },
-    (_req, body, done) => done(null, body),
-  );
+  // Body SOAP dibaca sebagai string apa pun Content-Type-nya. Sebagian ONU
+  // mengirim `text/plain`, `application/octet-stream`, atau tanpa header —
+  // parser yang ketat membuat Fastify membalas 415 dan sesi tak pernah jalan.
+  app.removeAllContentTypeParsers();
+  app.addContentTypeParser('*', { parseAs: 'string', bodyLimit: MAX_BODY }, (_req, body, done) => done(null, body));
+
+  // Sesi per koneksi TCP: CPE yang tidak menyimpan cookie biasanya tetap
+  // memakai koneksi keep-alive yang sama sepanjang sesi.
+  const bySocket = new WeakMap<object, string>();
+
+  const timer = setInterval(() => {
+    const now = Date.now();
+    for (const [k, e] of ctx.sessions) {
+      if (now - e.session.lastSeen > SESSION_IDLE_MS) ctx.sessions.delete(k);
+    }
+  }, 60_000);
+  timer.unref();
+
+  const newSession = (ip: string): [string, SessionEntry] => {
+    const sid = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+    const session = new CwmpSession({
+      dequeue: (device) => {
+        const task = ctx.queue.dequeue(deviceIdOf(device));
+        return task ? task.rpc : null;
+      },
+      record: (device, result) => {
+        const id = deviceIdOf(device);
+        ctx.onResult?.(id, result);
+        try {
+          applyResult(ctx, id, result);
+        } catch (e) {
+          // Kesalahan pemrosesan hasil tidak boleh memutus sesi CWMP.
+          ctx.db.addEvent(id, 'collection_error', `Gagal memproses ${result.kind}: ${(e as Error).message}`);
+        }
+      },
+    });
+    const entry: SessionEntry = { session, identity: null, createdAt: Date.now(), ip, viaCookie: false, noCookieLogged: false };
+    ctx.sessions.set(sid, entry);
+    return [sid, entry];
+  };
 
   app.post('/', async (req: FastifyRequest, reply: FastifyReply) => {
-    const cookies = parseCookies(req.headers.cookie);
-    let sid = cookies['acs_session'];
     const raw = typeof req.body === 'string' ? req.body : '';
-
     if (raw.length > MAX_BODY) {
       return reply.code(413).type('text/plain').send('payload too large');
     }
+    const ip = clientIp(req);
+    const method = soapMethod(raw);
+    const isInform = method === 'Inform';
+    const socket = req.raw.socket as object;
 
-    let entry: SessionEntry | undefined = sid ? ctx.sessions.get(sid) : undefined;
-
-    if (!entry) {
-      // Perangkat belum punya sesi (atau cookie-nya hilang). Buat baru —
-      // sesi yang belum menerima Inform akan menolak RPC apa pun.
-      sid = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
-      const session = new CwmpSession({
-        dequeue: (device) => {
-          const id = deviceIdOf(device);
-          const task = ctx.queue.dequeue(id);
-          return task ? task.rpc : null;
-        },
-        record: (device, result) => {
-          const id = deviceIdOf(device);
-          ctx.onResult?.(id, result);
-          try {
-            applyResult(ctx, id, result);
-          } catch (e) {
-            // Kesalahan pemrosesan hasil tidak boleh memutus sesi CWMP.
-            ctx.db.addEvent(id, 'collection_error', `Gagal memproses ${result.kind}: ${(e as Error).message}`);
-          }
-        },
-      });
-      entry = { session, identity: null, createdAt: Date.now() };
-      ctx.sessions.set(sid, entry);
+    // Cari sesi: cookie → koneksi TCP → IP (hanya bila tidak ambigu).
+    // Inform selalu membuka sesi baru.
+    let sid: string | undefined;
+    let entry: SessionEntry | undefined;
+    let via = 'baru';
+    if (!isInform) {
+      const ck = parseCookies(req.headers.cookie)['acs_session'];
+      if (ck && ctx.sessions.has(ck)) { sid = ck; via = 'cookie'; }
+      if (!sid) {
+        const s2 = bySocket.get(socket);
+        if (s2 && ctx.sessions.has(s2)) { sid = s2; via = 'koneksi'; }
+      }
+      if (!sid) {
+        const now = Date.now();
+        const cands = [...ctx.sessions].filter(([, e]) =>
+          e.ip === ip && e.identity && now - e.session.lastSeen < IP_FALLBACK_MS && e.session.state === 'in_session');
+        if (cands.length === 1) { sid = cands[0]![0]; via = 'ip'; }
+      }
+      entry = sid ? ctx.sessions.get(sid) : undefined;
     }
+    if (!entry) [sid, entry] = newSession(ip);
+    bySocket.set(socket, sid!);
+    if (via === 'cookie') entry.viaCookie = true;
+    if ((via === 'koneksi' || via === 'ip') && !entry.viaCookie && !entry.noCookieLogged && entry.identity) {
+      // Dicatat sekali per sesi: membantu menjelaskan perangkat yang
+      // sebelumnya tak pernah terbaca datanya.
+      entry.noCookieLogged = true;
+      ctx.db.addEvent(deviceIdOf(entry.identity), 'cwmp',
+        `CPE tidak mengirim cookie sesi — sesi dikenali lewat ${via}`);
+    }
+
     const outcome = entry.session.handle(raw);
 
     if (outcome.inform) {
@@ -137,7 +208,7 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
         return reply.code(401).type('text/plain').send('unauthorized');
       }
       entry.identity = outcome.inform.identity;
-      registerDevice(ctx, id, outcome.inform.identity, clientIp(req));
+      registerDevice(ctx, id, outcome.inform.identity, ip);
       // Nilai Inform (IP WAN, ConnectionRequestURL, versi SW) langsung
       // disimpan: data paling segar tanpa satu RPC pun.
       try {
@@ -148,17 +219,32 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
       ctx.onInform?.(id, {
         identity: outcome.inform.identity,
         events: outcome.inform.events,
-        ip: clientIp(req),
+        ip,
       });
     }
 
-    // Sesi selesai → buang supaya peta memori tidak tumbuh tanpa batas.
-    if (outcome.done) {
-      ctx.sessions.delete(sid!);
+    if (TRACE) {
+      const who = entry.identity ? deviceIdOf(entry.identity) : ip;
+      const out = outcome.status === 204 ? '204 (akhir sesi)' : soapMethod(outcome.responseXml);
+      console.log(`[cwmp] ${who} sesi=${sid} via=${via} ← ${method}${isInform && outcome.inform ? ` [${outcome.inform.events.join(', ')}] ns=${entry.session.cwmpNs.slice(-3)}` : ''} → ${out}`);
+      if (TRACE >= 2) {
+        if (raw) console.log(`[cwmp]   ← ${raw.slice(0, 4000)}`);
+        if (outcome.responseXml) console.log(`[cwmp]   → ${outcome.responseXml.slice(0, 4000)}`);
+      }
     }
 
-    reply.header('Set-Cookie', `acs_session=${sid}; Path=/; HttpOnly; SameSite=Strict; Max-Age=600`);
-    reply.header('Content-Type', 'text/xml; charset=utf-8');
+    // Sesi selesai → buang supaya peta memori tidak tumbuh tanpa batas.
+    if (outcome.done) ctx.sessions.delete(sid!);
+
+    // Cookie polos: atribut SameSite/HttpOnly/Max-Age tidak berguna untuk
+    // klien CWMP dan membuat parser cookie firmware lama menolaknya.
+    reply.header('Set-Cookie', `acs_session=${sid}; Path=/`);
+    if (outcome.status === 204 || !outcome.responseXml) {
+      // TR-069: respons HTTP kosong mengakhiri sesi.
+      return reply.code(204).send();
+    }
+    reply.header('Content-Type', 'text/xml; charset="utf-8"');
+    reply.header('SOAPServer', 'AWG-ACS');
     return reply.code(outcome.status).send(outcome.responseXml);
   });
 
@@ -254,9 +340,20 @@ function currentProfile(ctx: CwmpContext, deviceId: string): string[] {
   }
 }
 
+/**
+ * Path esensial perangkat ini: info dasar + kandidat redaman keluarga
+ * vendornya (lebih sedikit RPC split-on-fault di ONU yang menolak discovery).
+ */
+function deviceEssentials(ctx: CwmpContext, deviceId: string): string[] {
+  const row = ctx.db.getDevice(deviceId);
+  const fam = opticalFamily(row?.manufacturer ?? '', row?.oui ?? '', row?.product_class ?? '');
+  const invalid = new Set(ctx.db.invalidParams(deviceId));
+  return essentialPaths(deviceModel(ctx, deviceId), opticalCandidates(fam, invalid));
+}
+
 /** Path yang dibaca tiap siklus koleksi: esensial ∪ profil discovery. */
 export function collectPaths(ctx: CwmpContext, deviceId: string): string[] {
-  return [...new Set([...essentialPaths(deviceModel(ctx, deviceId)), ...currentProfile(ctx, deviceId)])];
+  return [...new Set([...deviceEssentials(ctx, deviceId), ...currentProfile(ctx, deviceId)])];
 }
 
 function parsePayload(raw: unknown): Record<string, unknown> {
@@ -324,8 +421,20 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
       const depth = (p: string): number => p.replace(/\.$/, '').split('.').length;
       const complete = !asked || names.some((n) => depth(n) > depth(asked) + 1);
       if (asked) {
+        // Entri antrean bisa berupa "next:<path>" (mode dangkal, lihat
+        // SHALLOW). Bila itu yang barusan dijawab, perangkat ini memang
+        // hanya mau NextLevel=true — subtree berikutnya ikut mode itu.
+        const wasShallow = ctx.db.pendingDiscoveryPaths(deviceId).includes(SHALLOW + asked);
         ctx.db.dropDiscoveryPath(deviceId, asked);
-        if (!ctx.db.getDiscoveryRoot(deviceId)) ctx.db.setDiscoveryRoot(deviceId, asked);
+        ctx.db.dropDiscoveryPath(deviceId, SHALLOW + asked);
+        const root = ctx.db.getDiscoveryRoot(deviceId);
+        if (wasShallow && !root?.startsWith(SHALLOW)) {
+          ctx.db.setDiscoveryRoot(deviceId, SHALLOW + asked);
+          ctx.db.addEvent(deviceId, 'collection',
+            'Perangkat menolak GetParameterNames NextLevel=false — pemetaan memakai mode bertingkat (NextLevel=true)');
+        } else if (!root) {
+          ctx.db.setDiscoveryRoot(deviceId, asked);
+        }
         if (complete && names.length) {
           // Subtree diketahui lengkap: parameter lama yang tidak dilaporkan
           // lagi (WAN terhapus) ikut dibuang.
@@ -339,7 +448,12 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
           }
         } else if (!complete) {
           const children = names.filter((n) => n.endsWith('.') && n !== asked && !SKIP_SUBTREE.test(n));
-          if (children.length) ctx.db.enqueueDiscoveryPaths(deviceId, children);
+          const shallowMode = ctx.db.getDiscoveryRoot(deviceId)?.startsWith(SHALLOW) ?? false;
+          // Batasi penelusuran bertingkat supaya ONU dengan pohon besar
+          // tidak dipanggil ratusan kali.
+          if (children.length && ctx.db.pendingDiscoveryPaths(deviceId).length < MAX_BFS_QUEUE) {
+            ctx.db.enqueueDiscoveryPaths(deviceId, shallowMode ? children.map((c) => SHALLOW + c) : children);
+          }
         }
       }
 
@@ -431,9 +545,22 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
 
       // GetParameterNames ditolak: root ini tidak ada di perangkat. Tandai
       // gagal dan lanjut ke root berikutnya.
+      // GetParameterNames ditolak. Percobaan NextLevel=false yang ditolak
+      // dicoba ulang SEKALI dengan NextLevel=true — sebagian firmware
+      // FiberHome/operator menolak permintaan seluruh subtree tetapi
+      // melayani penelusuran per tingkat. Bila mode dangkal juga ditolak,
+      // root ini memang tidak ada di perangkat.
       if (result.method === 'GetParameterNames' && result.askedPath) {
-        ctx.db.markDiscoveryRootFailed(deviceId, result.askedPath);
-        ctx.db.dropDiscoveryPath(deviceId, result.askedPath);
+        const p = result.askedPath;
+        const pending = ctx.db.pendingDiscoveryPaths(deviceId);
+        if (pending.includes(SHALLOW + p)) {
+          ctx.db.markDiscoveryRootFailed(deviceId, SHALLOW + p);
+          ctx.db.dropDiscoveryPath(deviceId, SHALLOW + p);
+        } else {
+          ctx.db.markDiscoveryRootFailed(deviceId, p);
+          ctx.db.dropDiscoveryPath(deviceId, p);
+          ctx.db.enqueueDiscoveryPaths(deviceId, [SHALLOW + p]);
+        }
         continueDiscovery(ctx, deviceId);
       }
       break;
@@ -657,9 +784,11 @@ export function enqueueDeleteObject(
  * ------------------------------------------------------------------ */
 
 /** Antrekan GetParameterNames(path, NextLevel=false) — seluruh subtree. */
-export function enqueueDiscoveryAt(ctx: CwmpContext, deviceId: string, path: string): string {
+export function enqueueDiscoveryAt(ctx: CwmpContext, deviceId: string, entry: string): string {
   const key = `disc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  ctx.queue.enqueue(deviceId, buildGetParameterNames(key, path, false));
+  const shallow = entry.startsWith(SHALLOW);
+  const path = shallow ? entry.slice(SHALLOW.length) : entry;
+  ctx.queue.enqueue(deviceId, buildGetParameterNames(key, path, shallow));
   return key;
 }
 
@@ -687,7 +816,7 @@ export function continueDiscovery(ctx: CwmpContext, deviceId: string): void {
     ctx.db.markDiscoveryDone(deviceId, n);
     // Leaf profil sudah dibaca saat tiap subtree dipetakan; tinggal path
     // esensial di luar root discovery (mis. redaman Huawei/ZTE di root IGD).
-    enqueueRead(ctx, deviceId, essentialPaths(deviceModel(ctx, deviceId)));
+    enqueueRead(ctx, deviceId, deviceEssentials(ctx, deviceId));
     ctx.db.addEvent(deviceId, 'collection', `Struktur perangkat dipetakan: ${n} path profil`);
     ctx.onDiscovery?.(deviceId, n, true);
   }
