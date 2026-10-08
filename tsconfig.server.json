@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "allowJs": false
+  },
+  "include": ["packages/acs-core/src/**/*.ts", "packages/acs-core/test/**/*.ts", "apps/server/src/**/*.ts", "apps/server/test/**/*.ts"],
+  "exclude": ["node_modules", "**/node_modules"]
+}

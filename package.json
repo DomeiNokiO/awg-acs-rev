@@ -1,0 +1,26 @@
+{
+  "name": "acs-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Custom TR-069 ACS - TypeScript, Next.js UI, SQLite",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w apps/server",
+    "dev:web": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "test": "node --test packages/acs-core/test/*.test.ts apps/server/test/*.test.ts"
+  },
+  "devDependencies": {
+    "@fastify/static": "^10.1.5",
+    "@types/node": "^26.6.4",
+    "bson": "^7.3.3",
+    "typescript": "^7.0.2"
+  }
+}

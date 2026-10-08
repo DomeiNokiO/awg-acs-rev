@@ -1,0 +1,326 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-10-07T06:33:51.842Z",
+  "sources": [
+    "https://github.com/paimo54/parameter (virtualParameters.bson, config.bson)"
+  ],
+  "virtualParameters": [
+    {
+      "name": "IPTR069",
+      "label": "IP TR069",
+      "unit": "",
+      "script": "// TR069 IP\nlet result = '';\n\nif (\"value\" in args[1]) {\n    result = args[1].value[0];\n}\n\nif (result === '' || result === '0.0.0.0') {\n    let keys = [\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WA",
+      "raw": {
+        "_id": "IPTR069",
+        "script": "// TR069 IP\nlet result = '';\n\nif (\"value\" in args[1]) {\n    result = args[1].value[0];\n}\n\nif (result === '' || result === '0.0.0.0') {\n    let keys = [\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.2.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.3.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.4.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.2.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.WANIPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.4.WANIPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.5.WANIPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.5.WANIPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ExternalIPAddress',\n        'Device.IP.Interface.1.IPv4Address.1.IPAddress'\n    ];\n\n    result = getParameterValue(keys);\n}\n\nreturn {writable: false, value: [result, \"xsd:string\"]};\n\nfunction getParameterValue(keys) {\n    for (let key of keys) {\n        if (key.includes('ExternalIPAddress')) {\n            let connectionTypeKey = key.replace('ExternalIPAddress', 'ConnectionType');\n            let connectionType = declare(connectionTypeKey, {value: Date.now()});\n            if (connectionType.size && connectionType.value[0] === 'bridge') {\n                continue;\n            }\n        }\n\n        let d = declare(key, {path: Date.now() - (120 * 1000), value: Date.now()});\n\n        for (let item of d) {\n            if (item.value && item.value[0] && item.value[0] !== '0.0.0.0') {\n                return item.value[0];\n            }\n        }\n    }\n\n    return '';\n}\n"
+      }
+    },
+    {
+      "name": "RXPower",
+      "label": "Optic Rx Power",
+      "unit": "dBm",
+      "script": "// Parameter pengukuran PON RX pada perangkat berbeda\n// https://wa.me/628980999878\n\nlet m = \"N/A\";\nlet db = \"\";\nlet zte = declare(\"InternetGatewayDevice.WANDevice.*.X_ZTE-COM_WANPONInterfaceConfig.RXPower\", {value: Date.now()});\nlet huawei = declare(\"InternetGatewayDevice.WANDevice.*.X_GponInterafc",
+      "raw": {
+        "_id": "RXPower",
+        "script": "// Parameter pengukuran PON RX pada perangkat berbeda\n// https://wa.me/628980999878\n\nlet m = \"N/A\";\nlet db = \"\";\nlet zte = declare(\"InternetGatewayDevice.WANDevice.*.X_ZTE-COM_WANPONInterfaceConfig.RXPower\", {value: Date.now()});\nlet huawei = declare(\"InternetGatewayDevice.WANDevice.*.X_GponInterafceConfig.RXPower\", {value: Date.now()});\nlet fiberhome = declare(\"InternetGatewayDevice.WANDevice.*.X_FH_GponInterfaceConfig.RXPower\", {value: Date.now()});\nlet ztecmcc = declare(\"InternetGatewayDevice.WANDevice.*.X_CMCC_EponInterfaceConfig.RXPower\" , {value: Date.now()});\nlet ztecmcg = declare(\"InternetGatewayDevice.WANDevice.*.X_CMCC_GponInterfaceConfig.RXPower\" , {value: Date.now()});\nlet gm220se = declare(\"InternetGatewayDevice.WANDevice.*.X_CT-COM_EponInterfaceConfig.RXPower\" , {value: Date.now()});\nlet gm220sg = declare(\"InternetGatewayDevice.WANDevice.*.X_CT-COM_GponInterfaceConfig.RXPower\" , {value: Date.now()});\nlet f477v2 = declare(\"InternetGatewayDevice.WANDevice.*.X_CU_WANEPONInterfaceConfig.OpticalTransceiver.RXPower\"\t, {value: Date.now()});\nlet nokia = declare(\"InternetGatewayDevice.X_ALU_OntOpticalParam.RXPower\" , {value: Date.now()});\n\t\nif (zte.size) {\n   let zteval = zte.value[0]\n   if (zteval < 0) {\n      m = zteval;\n      \n    }\n    else if (zteval > 0) {\n      db = 30 + (Math.log10((zteval * (Math.pow(10,-7))))*10);\n\t  m = Math.ceil(db * 100) / 100;\n    }\n}\nelse if (ztecmcc.size) {\n   let zteval = ztecmcc.value[0]\n   if (zteval < 0) {\n      m = zteval;\n      \n    }\n    else if (zteval > 0) {\n      db = 30 + (Math.log10((zteval * (Math.pow(10,-7))))*10);\n\t  m = Math.ceil(db * 100) / 100;\n    }\n}\nelse if (ztecmcg.size) {\n   let zteval = ztecmcg.value[0]\n   if (zteval < 0) {\n      m = zteval;\n      \n    }\n    else if (zteval > 0) {\n      db = 30 + (Math.log10((zteval * (Math.pow(10,-7))))*10);\n\t  m = Math.ceil(db * 100) / 100;\n    }\n}\nelse if (gm220se.size) {\n   let zteval = gm220se.value[0]\n   if (zteval < 0) {\n      m = zteval;\n      \n    }\n    else if (zteval > 0) {\n      db = 30 + (Math.log10((zteval * (Math.pow(10,-7))))*10);\n\t  m = Math.ceil(db * 100) / 100;\n    }\n}\nelse if (gm220sg.size) {\n   let zteval = gm220sg.value[0]\n   if (zteval < 0) {\n      m = zteval;\n      \n    }\n    else if (zteval > 0) {\n      db = 30 + (Math.log10((zteval * (Math.pow(10,-7))))*10);\n\t  m = Math.ceil(db * 100) / 100;\n    }\n}\nelse if (f477v2.size) {\n   let zteval = f477v2.value[0]\n   if (zteval < 0) {\n      m = zteval;\n      \n    }\n    else if (zteval > 0) {\n      db = 30 + (Math.log10((zteval * (Math.pow(10,-7))))*10);\n\t  m = Math.ceil(db * 100) / 100;\n    }\n}\nelse if (huawei.size) {\n  for (let p of huawei) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\nelse if (fiberhome.size) {\n  for (let p of fiberhome) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\nelse if (nokia.size) {\n  for (let p of nokia) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\nreturn {writable: false, value: [m, \"xsd:string\"]};"
+      }
+    },
+    {
+      "name": "WlanPassword",
+      "label": "WiFi Password",
+      "unit": "",
+      "script": "// WLAN PW\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase\", null, {value: m});\n  declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase\", null, {value: m});\n}\nelse {\n  let v1",
+      "raw": {
+        "_id": "WlanPassword",
+        "script": "// WLAN PW\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase\", null, {value: m});\n  declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase\", null, {value: m});\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase\", {value: Date.now()});\n  let v2 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase\", {value: Date.now()});\n\n\n  if (v1.size) {\n    m = v1.value[0];\n  }\n  else if (v2.size) {\n    m = v2.value[0];\n  }\n}\n\nreturn {writable: true, value: [m, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "getdeviceuptime",
+      "label": "Device Uptime",
+      "unit": "",
+      "script": "// Device Uptime\nlet totalSecs = \"\";\nconst brand = declare('DeviceID.Manufacturer', {value: 1}).value[0];\n\nif (args[1].value) {\n  totalSecs = args[1].value[0];\n  if (brand !== 'MikroTik') {\n    declare(\"InternetGatewayDevice.DeviceInfo.UpTime\", null, {value: totalSecs});\n  } else {\n    declare(\"Devi",
+      "raw": {
+        "_id": "getdeviceuptime",
+        "script": "// Device Uptime\nlet totalSecs = \"\";\nconst brand = declare('DeviceID.Manufacturer', {value: 1}).value[0];\n\nif (args[1].value) {\n  totalSecs = args[1].value[0];\n  if (brand !== 'MikroTik') {\n    declare(\"InternetGatewayDevice.DeviceInfo.UpTime\", null, {value: totalSecs});\n  } else {\n    declare(\"Device.DeviceInfo.UpTime\", null, {value: totalSecs});\n  }\n}\nelse {\n  if (brand !== 'MikroTik') {\n    totalSecs = declare(\"InternetGatewayDevice.DeviceInfo.UpTime\", {value: Date.now()}).value[0];\n  } else {\n    totalSecs = declare(\"Device.DeviceInfo.UpTime\", {value: Date.now()}).value[0];\n  }\n}\nlet days = Math.floor(totalSecs / 86400);\nlet rem  = totalSecs % 86400;\nlet hrs  = Math.floor(rem / 3600);\nif (hrs < 10) {\n\thrs = \"0\" + hrs;\n}\n\nrem  = rem % 3600;\nlet mins = Math.floor(rem / 60);\nif (mins < 10) {\n\tmins = \"0\" + mins;\n}\nlet secs = rem % 60;\nif (secs < 10) {\n\tsecs = \"0\" + secs;\n}\n\nlet up = days + \"d \" + hrs + \":\" + mins + \":\" + secs;\n\nreturn {writable: false, value: up};"
+      }
+    },
+    {
+      "name": "getponmode",
+      "label": "PON Mode",
+      "unit": "",
+      "script": "// Mendapatkan informasi PON\nlet pon = \"\";\nif (args[1].value) {\n  pon = args[1].value[0];\n  declare(\"InternetGatewayDevice.DeviceInfo.X_HW_UpPortMode\", {value: Date.now()});\n  \n}\nelse {\n  \n  let v1 = declare(\"InternetGatewayDevice.WANDevice.*.WANCommonInterfaceConfig.WANAccessType\", {value: Date.now",
+      "raw": {
+        "_id": "getponmode",
+        "script": "// Mendapatkan informasi PON\nlet pon = \"\";\nif (args[1].value) {\n  pon = args[1].value[0];\n  declare(\"InternetGatewayDevice.DeviceInfo.X_HW_UpPortMode\", {value: Date.now()});\n  \n}\nelse {\n  \n  let v1 = declare(\"InternetGatewayDevice.WANDevice.*.WANCommonInterfaceConfig.WANAccessType\", {value: Date.now()});\n\n  if (v1.size) {\n    pon = v1.value[0];\n  }\n}\n\npon = pon.toUpperCase();\n\nconst brand = declare('DeviceID.Manufacturer', {value: Date.now(86400000)}).value[0];\nif (brand === 'RAISECOM' || brand === 'Raisecom' ) {\n  pon = \"GPON\";\n} else if (pon.includes(\"EPON\")) {\n  pon = \"EPON\";\n} else if (pon.includes(\"GPON\")) {\n  pon = \"GPON\";\n} else if (pon.includes(\"PON\")) {\n  pon = \"GPON\";\n} else {\n  pon = \"Ethernet\";\n}\n\n\nreturn {writable: false, value: [pon, \"xsd:string\"]};"
+      }
+    },
+    {
+      "name": "pppoeIP",
+      "label": "IP PPPoE",
+      "unit": "",
+      "script": "// pppoeIP New\nlet result = '';\n\nif (\"value\" in args[1]) {\n    result = args[1].value[0];\n}\n\nif (result === '') {\n    let keys = [\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.*.WANConnectionDevice.1.",
+      "raw": {
+        "_id": "pppoeIP",
+        "script": "// pppoeIP New\nlet result = '';\n\nif (\"value\" in args[1]) {\n    result = args[1].value[0];\n}\n\nif (result === '') {\n    let keys = [\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.*.WANConnectionDevice.1.WANPPPConnection.2.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.2.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.WANPPPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.4.WANPPPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.5.WANPPPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.5.WANPPPConnection.1.ExternalIPAddress',\n        'InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.ExternalIPAddress',\n        'Device.IP.Interface.1.IPv4Address.1.IPAddress'\n    ];\n\n    result = getParameterValue(keys);\n}\n\nlog(\"pppoeIP: \" + result);\nreturn {writable: false, value: [result, \"xsd:string\"]};\n\nfunction getParameterValue(keys) {\n    for (let key of keys) {\n        if (key.includes('WANPPPConnection.1.ExternalIPAddress')) {\n            let connectionTypeKey = key.replace('ExternalIPAddress', 'ConnectionType');\n            let connectionType = declare(connectionTypeKey, {value: Date.now()});\n            if (connectionType.size && connectionType.value[0] === 'bridge') {\n                continue;\n            }\n        }\n\n        let d = declare(key, {path: Date.now() - (120 * 1000), value: Date.now()});\n\n        for (let item of d) {\n            if (item.value && item.value[0] && item.value[0] !== '0.0.0.0') {\n                return item.value[0];\n            }\n        }\n    }\n\n    return '';\n}\n"
+      }
+    },
+    {
+      "name": "pppoeMac",
+      "label": "MAC PPPoE",
+      "unit": "",
+      "script": "// Mac Address PPPoE Pada devices berbeda\nlet m = \"\";\nlet w1 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress\", {value: Date.now()});\nlet w2 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.2.MACAddress\", {value: Date",
+      "raw": {
+        "_id": "pppoeMac",
+        "script": "// Mac Address PPPoE Pada devices berbeda\nlet m = \"\";\nlet w1 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress\", {value: Date.now()});\nlet w2 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.2.MACAddress\", {value: Date.now()});\nlet w3 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.MACAddress\", {value: Date.now()});\nlet w4 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.2.MACAddress\", {value: Date.now()});\n\t\t\t\t   \n\nif (w1.size) {\n  for (let p of w1) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\nelse if (w2.size) {\n  for (let p of w2) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\nelse if (w3.size) {\n  for (let p of w3) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\nelse if (w4.size) {\n  for (let p of w4) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\n\nreturn {writable: false, value: [m, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "pppoePassword",
+      "label": "PPPoE Password",
+      "unit": "",
+      "script": "// PPPoE Password\nlet pw = \"\";\nif (args[1].value) {\n  pw = args[1].value[0];\n  declare(\"InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Password\", null, {value: pw});\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Pa",
+      "raw": {
+        "_id": "pppoePassword",
+        "script": "// PPPoE Password\nlet pw = \"\";\nif (args[1].value) {\n  pw = args[1].value[0];\n  declare(\"InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Password\", null, {value: pw});\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Password\", {value: Date.now()});\n\n  if (v1.size) {\n    pw = v1.value[0];\n  }\n}\n\nreturn {writable: true, value: [pw, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "pppoeUsername",
+      "label": "PPPoE Username",
+      "unit": "",
+      "script": "// PPPoE Username\nlet user = \"\";\nif (args[1].value) {\n  user = args[1].value[0];\n  declare(\"InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Username\", null, {value: user});\n} else {\n  let v1 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnectio",
+      "raw": {
+        "_id": "pppoeUsername",
+        "script": "// PPPoE Username\nlet user = \"\";\nif (args[1].value) {\n  user = args[1].value[0];\n  declare(\"InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Username\", null, {value: user});\n} else {\n  let v1 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.1.Username\", {value: Date.now()});\n  let v2 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.2.Username\", {value: Date.now()});\n  let v3 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.3.Username\", {value: Date.now()});\n  let v4 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.4.Username\", {value: Date.now()});\n  let v5 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.5.Username\", {value: Date.now()});\n  let v6 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username\", {value: Date.now()});\n  let v7 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.2.Username\", {value: Date.now()});\n  let v8 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.3.Username\", {value: Date.now()});\n  let v9 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.4.Username\", {value: Date.now()});\n  let v10 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.5.Username\", {value: Date.now()});\n\n  if (v1.size && v1.value[0]) {\n    user = v1.value[0];\n  } else if (v2.size && v2.value[0]) {\n    user = v2.value[0];\n  } else if (v3.size && v3.value[0]) {\n    user = v3.value[0];\n  } else if (v4.size && v4.value[0]) {\n    user = v4.value[0];\n  } else if (v5.size && v5.value[0]) {\n    user = v5.value[0];\n  } else if (v6.size && v6.value[0]) {\n    user = v6.value[0];\n  } else if (v7.size && v7.value[0]) {\n    user = v7.value[0];\n  } else if (v8.size && v8.value[0]) {\n    user = v8.value[0];\n  } else if (v9.size && v9.value[0]) {\n    user = v9.value[0];\n  } else if (v10.size && v10.value[0]) {\n    user = v10.value[0];\n  }\n}\n\n\nreturn {writable: true, value: [user, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "gettemp",
+      "label": "Temperatur",
+      "unit": "°C",
+      "script": "// Parameter pengukuran Temperatur pada perangkat berbeda\n// https://wa.me/628980999878\n\nlet m = \"N/A\";\nlet db = \"\";\nlet zte1 = declare(\"InternetGatewayDevice.WANDevice.1.X_CU_WANEPONInterfaceConfig.OpticalTransceiver.Temperature\", {value: Date.now()});\nlet zte2 = declare(\"InternetGatewayDevice.WAND",
+      "raw": {
+        "_id": "gettemp",
+        "script": "// Parameter pengukuran Temperatur pada perangkat berbeda\n// https://wa.me/628980999878\n\nlet m = \"N/A\";\nlet db = \"\";\nlet zte1 = declare(\"InternetGatewayDevice.WANDevice.1.X_CU_WANEPONInterfaceConfig.OpticalTransceiver.Temperature\", {value: Date.now()});\nlet zte2 = declare(\"InternetGatewayDevice.WANDevice.1.X_CU_WANGPONInterfaceConfig.OpticalTransceiver.Temperature\", {value: Date.now()});\nlet zte3 = declare(\"InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.TransceiverTemperature\", {value: Date.now()});\nlet zte4 = declare(\"InternetGatewayDevice.WANDevice.1.X_CMCC_EponInterfaceConfig.TransceiverTemperature\", {value: Date.now()});\nlet zte5 = declare(\"InternetGatewayDevice.WANDevice.1.X_CMCC_GponInterfaceConfig.TransceiverTemperature\", {value: Date.now()});\nlet huawei = declare(\"InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TransceiverTemperature\", {value: Date.now()});\nlet jze = declare(\"InternetGatewayDevice.WANDevice.1.X_CT-COM_EponInterfaceConfig.TransceiverTemperature\", {value: Date.now()});\nlet jzg = declare(\"InternetGatewayDevice.WANDevice.1.X_CT-COM_GponInterfaceConfig.TransceiverTemperature\", {value: Date.now()});\nlet fh = declare(\"InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig.TransceiverTemperature\", {value: Date.now()});\n\n\nconst tr069Values = [11509, 11876, 10866, 10592, 11142, 11968];\nconst temperatures = [45, 46, 42, 41, 43, 46];\n\nconst regression = linearRegression(tr069Values, temperatures);\n\nfunction convertTr069ToTemperature(tr069Value) {\n  return regression.slope * tr069Value + regression.intercept;\n}\n\n\nif (zte1.size) {\n   let zteval = zte1.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (zte2.size) {\n   let zteval = zte2.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (zte3.size) {\n   let zteval = zte3.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (zte4.size) {\n   let zteval = zte4.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (zte5.size) {\n   let zteval = zte5.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (huawei.size) {\n   let zteval = huawei.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (jze.size) {\n   let zteval = jze.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (jzg.size) {\n   let zteval = jzg.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\nelse if (fh.size) {\n   let zteval = fh.value[0]\n   if (zteval < 150) {\n      m = zteval;\n      \n    }\n    else if (zteval > 150) {\n      const tr069Value = zteval;\n      const temperature = convertTr069ToTemperature(tr069Value);\n\t  m = temperature.toFixed(0);\n    }\n}\n\n// Fungsi regresi linear\nfunction linearRegression(x, y) {\n  const n = x.length;\n  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;\n\n  for (let i = 0; i < n; i++) {\n    sumX += x[i];\n    sumY += y[i];\n    sumXY += x[i] * y[i];\n    sumX2 += x[i] * x[i];\n  }\n\n  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);\n  const intercept = (sumY - slope * sumX) / n;\n\n  return { slope, intercept };\n}\nreturn {writable: false, value: [m, \"xsd:string\"]};"
+      }
+    },
+    {
+      "name": "userPassword",
+      "label": "Password User",
+      "unit": "",
+      "script": "// virtual parameter user password\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.UserPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.UserPassword\", null, {value: m});\n  declare(\"InternetG",
+      "raw": {
+        "_id": "userPassword",
+        "script": "// virtual parameter user password\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.UserPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.UserPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.1.Password\", null, {value: m});\n  declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.User.2.Password\", null, {value: m});\n  declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.UserPassword\", null, {value: m});\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.X_CU_Function.Web.UserPassword\", {value: Date.now()});\n  let v2 = declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.UserPassword\", {value: Date.now()});\n  let v3 = declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.1.Password\", {value: Date.now()});\n  let v4 = declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebPassword\", {value: Date.now()});\n  let v5 = declare(\"InternetGatewayDevice.User.2.Password\", {value: Date.now()});\n  let v6 = declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.UserPassword\", {value: Date.now()});\n\n  if (v1.size) {\n    m = v1.value[0];\n  }\n  else if (v2.size) {\n    m = v2.value[0];\n  }\n  else if (v3.size) {\n    m = v3.value[0];\n  }\n  else if (v4.size) {\n    m = v4.value[0];\n  }\n  else if (v5.size) {\n    m = v5.value[0];\n  }\n  else if (v6.size) {\n    m = v6.value[0];\n  }\n}\n\nreturn {writable: true, value: [m, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "userAdmin",
+      "label": "User Admin",
+      "unit": "",
+      "script": "// virtual parameter user admin\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.UserName\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.UserName\", null, {value: m});\n  declare(\"InternetGatewayDevic",
+      "raw": {
+        "_id": "userAdmin",
+        "script": "// virtual parameter user admin\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.UserName\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.UserName\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.1.UserName\", null, {value: m});\n  declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebUsername\", null, {value: m});\n  declare(\"InternetGatewayDevice.User.2.Username\", null, {value: m});\n  declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.UserName\", null, {value: m});\n\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.X_CU_Function.Web.UserName\", {value: Date.now()});\n  let v2 = declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.UserName\", {value: Date.now()});\n  let v3 = declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.1.UserName\", {value: Date.now()});\n  let v4 = declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebUsername\", {value: Date.now()});\n  let v5 = declare(\"InternetGatewayDevice.User.2.Username\", {value: Date.now()});\n  let v6 = declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.UserName\", {value: Date.now()});\n\n  if (v1.size) {\n    m = v1.value[0];\n  }\n  else if (v2.size) {\n    m = v2.value[0];\n  }\n  else if (v3.size) {\n    m = v3.value[0];\n  }\n  else if (v4.size) {\n    m = v4.value[0];\n  }\n  else if (v5.size) {\n    m = v5.value[0];\n  }\n  else if (v6.size) {\n    m = v6.value[0];\n  }\n}\n\nreturn {writable: true, value: [m, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "superAdmin",
+      "label": "User SuperAdmin",
+      "unit": "",
+      "script": "// virtual parameter superadmin username\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.AdminName\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.AdminName\", null, {value: m});\n  declare(\"InternetG",
+      "raw": {
+        "_id": "superAdmin",
+        "script": "// virtual parameter superadmin username\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.AdminName\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.AdminName\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.2.UserName\", null, {value: m});\n  declare(\"InternetGatewayDevice.DeviceInfo.X_CMCC_TeleComAccount.Username\", null, {value: m});\n  declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebSuperUsername\", null, {value: m});\n  declare(\"InternetGatewayDevice.User.1.Username\", null, {value: m});\n  declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.AdminName\", null, {value: m});\n\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.X_CU_Function.Web.AdminName\", {value: Date.now()});\n  let v2 = declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.AdminName\", {value: Date.now()});\n  let v3 = declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.2.UserName\", {value: Date.now()});\n  let v4 = declare(\"InternetGatewayDevice.DeviceInfo.X_CMCC_TeleComAccount.Username\", {value: Date.now()});\n  let v5 = declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebSuperUsername\", {value: Date.now()});\n  let v6 = declare(\"InternetGatewayDevice.User.1.Username\", {value: Date.now()});\n  let v7 = declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.AdminName\", {value: Date.now()});\n\n  if (v1.size) {\n    m = v1.value[0];\n  }\n  else if (v2.size) {\n    m = v2.value[0];\n  }\n  else if (v3.size) {\n    m = v3.value[0];\n  }\n  else if (v4.size) {\n    m = v4.value[0];\n  }\n  else if (v5.size) {\n    m = v5.value[0];\n  }\n  else if (v6.size) {\n    m = v6.value[0];\n  }\n  else if (v7.size) {\n    m = v7.value[0];\n  }\n}\n\nreturn {writable: true, value: [m, \"xsd:string\"]};"
+      }
+    },
+    {
+      "name": "superPassword",
+      "label": "Password SuperAdmin",
+      "unit": "",
+      "script": "// virtual parameter superadmin password\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.AdminPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.AdminPassword\", null, {value: m});\n  declare(\"I",
+      "raw": {
+        "_id": "superPassword",
+        "script": "// virtual parameter superadmin password\nlet m = \"\";\nif (args[1].value) {\n  m = args[1].value[0];\n  declare(\"InternetGatewayDevice.X_CU_Function.Web.AdminPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.AdminPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.2.Password\", null, {value: m});\n  declare(\"InternetGatewayDevice.DeviceInfo.X_CMCC_TeleComAccount.Password\", null, {value: m});\n  declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebSuperPassword\", null, {value: m});\n  declare(\"InternetGatewayDevice.User.1.Password\", null, {value: m});\n  declare(\"InternetGatewayDevice.X_Authentication.WebAccount.Password\", null, {value: m});\n  declare(\"InternetGatewayDevice.DeviceInfo.X_CT-COM_TeleComAccount.Password\", null, {value: m});\n  declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.AdminPassword\", null, {value: m});\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.X_CU_Function.Web.AdminPassword\", {value: Date.now()});\n  let v2 = declare(\"InternetGatewayDevice.X_Authentication.WebAccount.Password\", {value: Date.now()});\n  let v3 = declare(\"InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.2.Password\", {value: Date.now()});\n  let v4 = declare(\"InternetGatewayDevice.DeviceInfo.X_CT-COM_TeleComAccount.Password\", {value: Date.now()});\n  let v5 = declare(\"InternetGatewayDevice.DeviceInfo.X_CMCC_TeleComAccount.Password\", {value: Date.now()});\n  let v6 = declare(\"InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebSuperPassword\", {value: Date.now()});\n  let v7 = declare(\"InternetGatewayDevice.User.1.Password\", {value: Date.now()});\n  let v8 = declare(\"InternetGatewayDevice.UserInterface.X_ZTE-COM_WebUserInfo.AdminPassword\", {value: Date.now()});\n  let v9 = declare(\"InternetGatewayDevice.X_ZTE-COM_UserInterface.X_ZTE-COM_WebUserInfo.AdminPassword\", {value: Date.now()});\n\n\t\n  if (v1.size) {\n    m = v1.value[0];\n  }\n  else if (v2.size) {\n    m = v2.value[0];\n  }\n  else if (v3.size) {\n    m = v3.value[0];\n  }\n  else if (v4.size) {\n    m = v4.value[0];\n  }\n  else if (v5.size) {\n    m = v5.value[0];\n  }\n  else if (v6.size) {\n    m = v6.value[0];\n  }\n  else if (v7.size) {\n    m = v7.value[0];\n  }\n  else if (v8.size) {\n    m = v8.value[0];\n  }\n  else if (v9.size) {\n    m = v9.value[0];\n  }\n}\n\nreturn {writable: true, value: [m, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "pppoeUsername2",
+      "label": "PPPoE Username 2",
+      "unit": "",
+      "script": "// pppoe User (index page)\nlet result = '';\n\nif (\"value\" in args[1]) {\n    result = args[1].value[0];\n}\n\nif (result === '') {\n    let keys = [\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username',\n        'InternetGatewayDevice.WANDevice.*.WANConnectionDevice",
+      "raw": {
+        "_id": "pppoeUsername2",
+        "script": "// pppoe User (index page)\nlet result = '';\n\nif (\"value\" in args[1]) {\n    result = args[1].value[0];\n}\n\nif (result === '') {\n    let keys = [\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username',\n        'InternetGatewayDevice.WANDevice.*.WANConnectionDevice.1.WANPPPConnection.2.Username',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.2.Username',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.WANPPPConnection.1.Username',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.WANPPPConnection.2.Username',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.4.WANPPPConnection.1.Username',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.4.WANPPPConnection.2.Username',\n        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.5.WANPPPConnection.1.Username',\n        'InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANPPPConnection.*.Username',\n    ];\n\n    result = getParameterValue(keys);\n}\n\nlog(\"pppoeIP: \" + result);\nreturn {writable: false, value: [result, \"xsd:string\"]};\n\nfunction getParameterValue(keys) {\n    for (let key of keys) {\n        if (key.includes('WANPPPConnection.1.Username')) {\n            let connectionTypeKey = key.replace('Username', 'ConnectionType');\n            let connectionType = declare(connectionTypeKey, {value: Date.now()});\n            if (connectionType.size && connectionType.value[0] === 'PPPoE_Bridged') {\n                continue;\n            }\n        }\n\n        let d = declare(key, {path: Date.now() - (120 * 1000), value: Date.now()});\n\n        for (let item of d) {\n            if (item.value && item.value[0] && item.value[0] !== '') {\n                return item.value[0];\n            }\n        }\n    }\n\n    return '';\n}\n"
+      }
+    },
+    {
+      "name": "activedevices",
+      "label": "Perangkat Wifi Aktif",
+      "unit": "",
+      "script": "// Total active all ssid\n// By HR whatsapp 0838-3236-2616\n\nlet active = 0;\nlet isNumber = (value) => {\n  return typeof value === 'number' && isFinite(value);\n};\n\nconst merk = declare('DeviceID.Manufacturer', {value: Date.now(86400000)}).value[0];\nconst tipe = declare('DeviceID.ProductClass', {value:",
+      "raw": {
+        "_id": "activedevices",
+        "script": "// Total active all ssid\n// By HR whatsapp 0838-3236-2616\n\nlet active = 0;\nlet isNumber = (value) => {\n  return typeof value === 'number' && isFinite(value);\n};\n\nconst merk = declare('DeviceID.Manufacturer', {value: Date.now(86400000)}).value[0];\nconst tipe = declare('DeviceID.ProductClass', {value: Date.now(86400000)}).value[0];\nif (merk !== \"FiberHome\" || tipe === \"HG6243C\") {\nlet ssid1 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations\", {value: Date.now()});\nlet ssid2 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.TotalAssociations\", {value: Date.now()});\nlet ssid3 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.3.TotalAssociations\", {value: Date.now()});\nlet ssid4 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.4.TotalAssociations\", {value: Date.now()});\nlet ssid5 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations\", {value: Date.now()});\nlet ssid6 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.6.TotalAssociations\", {value: Date.now()});\nlet ssid7 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.7.TotalAssociations\", {value: Date.now()});\nlet ssid8 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.8.TotalAssociations\", {value: Date.now()});\n\nif (ssid1 && ssid1.size && isNumber(ssid1.value[0])) {\n  active += ssid1.value[0];\n}\n\nif (ssid2 && ssid2.size && isNumber(ssid2.value[0])) {\n  active += ssid2.value[0];\n}\n\nif (ssid3 && ssid3.size && isNumber(ssid3.value[0])) {\n  active += ssid3.value[0];\n}\n\nif (ssid4 && ssid4.size && isNumber(ssid4.value[0])) {\n  active += ssid4.value[0];\n}\n\nif (ssid5 && ssid5.size && isNumber(ssid5.value[0])) {\n  active += ssid5.value[0];\n}\n\nif (ssid6 && ssid6.size && isNumber(ssid6.value[0])) {\n  active += ssid6.value[0];\n}\n\nif (ssid7 && ssid7.size && isNumber(ssid7.value[0])) {\n  active += ssid7.value[0];\n}\n\nif (ssid8 && ssid8.size && isNumber(ssid8.value[0])) {\n  active += ssid8.value[0];\n}\n} else {\n  let ssid1 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n  let ssid2 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n  let ssid3 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.3.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n  let ssid4 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.4.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n  let ssid5 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n  let ssid6 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.6.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n  let ssid7 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.7.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n  let ssid8 = declare(\"InternetGatewayDevice.LANDevice.1.WLANConfiguration.8.WLAN_AssociatedDeviceNumberOfEntries\", {value: Date.now()});\n\n\n  if (ssid1 && ssid1.size && isNumber(ssid1.value[0])) {\n    active += ssid1.value[0];\n  }\n  \n  if (ssid2 && ssid2.size && isNumber(ssid2.value[0])) {\n    active += ssid2.value[0];\n  }\n  \n  if (ssid3 && ssid3.size && isNumber(ssid3.value[0])) {\n    active += ssid3.value[0];\n  }\n  \n  if (ssid4 && ssid4.size && isNumber(ssid4.value[0])) {\n    active += ssid4.value[0];\n  }\n  \n  if (ssid5 && ssid5.size && isNumber(ssid5.value[0])) {\n    active += ssid5.value[0];\n  }\n  \n  if (ssid6 && ssid6.size && isNumber(ssid6.value[0])) {\n    active += ssid6.value[0];\n  }\n  \n  if (ssid7 && ssid7.size && isNumber(ssid7.value[0])) {\n    active += ssid7.value[0];\n  }\n  \n  if (ssid8 && ssid8.size && isNumber(ssid8.value[0])) {\n    active += ssid8.value[0];\n  }\n}\nreturn {writable: false, value: active};\n"
+      }
+    },
+    {
+      "name": "getpppuptime",
+      "label": "PPP Uptime",
+      "unit": "",
+      "script": "// virtual PPPoE Uptime. Info https://wa.me/6281336128448\nlet totalSecs = \"\";\nif (args[1].value) {\n  totalSecs = args[1].value[0];\n  declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.*.Uptime\", null, {value: totalSecs});\n  declare(\"InternetGatewayDevice.DeviceInfo.UpT",
+      "raw": {
+        "_id": "getpppuptime",
+        "script": "// virtual PPPoE Uptime. Info https://wa.me/6281336128448\nlet totalSecs = \"\";\nif (args[1].value) {\n  totalSecs = args[1].value[0];\n  declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.*.Uptime\", null, {value: totalSecs});\n  declare(\"InternetGatewayDevice.DeviceInfo.UpTime\", null, {value: totalSecs});\n\n}\nelse {\n  let v1 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.*.Uptime\", {value: Date.now()});\n  let v2 = declare(\"InternetGatewayDevice.DeviceInfo.UpTime\", {value: Date.now()});\n//  totalSecs = v1.value[0];\n  if (v1.size) {\n    totalSecs = v1.value[0];\n  }\n}\nlet days = Math.floor(totalSecs / 86400);\nlet rem  = totalSecs % 86400;\nlet hrs  = Math.floor(rem / 3600);\nif (hrs < 10) {\n\thrs = \"0\" + hrs;\n}\n\nrem  = rem % 3600;\nlet mins = Math.floor(rem / 60);\nif (mins < 10) {\n\tmins = \"0\" + mins;\n}\nlet secs = rem % 60;\nif (secs < 10) {\n\tsecs = \"0\" + secs;\n}\n\nlet up = days + \"d \" + hrs + \":\" + mins + \":\" + secs;\n\nreturn {writable: false, value: up};"
+      }
+    },
+    {
+      "name": "PonMac",
+      "label": "PON MAC",
+      "unit": "",
+      "script": "// Mac Address PON\nlet m = \"\";\nlet mac1 = declare(\"InternetGatewayDevice.DeviceInfo.X_CU_SerialNumber\", {value: Date.now()});\nlet mac2 = declare(\"InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MACAddress\", {value: Date.now()});\nlet mac3 = declare(\"InternetGatewayDevice.WANDevice.1.WANConn",
+      "raw": {
+        "_id": "PonMac",
+        "script": "// Mac Address PON\nlet m = \"\";\nlet mac1 = declare(\"InternetGatewayDevice.DeviceInfo.X_CU_SerialNumber\", {value: Date.now()});\nlet mac2 = declare(\"InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MACAddress\", {value: Date.now()});\nlet mac3 = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress\", {value: Date.now()});\n\nlet manufacturer = declare(\"DeviceID.Manufacturer\", {value: Date.now()});\nif (manufacturer.value[0] == \"ZIONCOM\") {\n  for (let p of mac3) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n} else if (mac1.size) {\n  for (let p of mac1) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n} else if (mac2.size) {\n  for (let p of mac2) {\n    if (p.value[0]) {\n      m = p.value[0];\n      break;\n    }\n  }\n}\n\n\nreturn {writable: false, value: [m, \"xsd:string\"]};\n"
+      }
+    },
+    {
+      "name": "getSerialNumber",
+      "label": "SN ONT",
+      "unit": "",
+      "script": "// Mendapatkan SN ONT. Info https://wa.me/6281336128448\nlet serialNumber = \"\";\nlet sn = \"\";\nlet hexPart = \"\";\n\n// Hex To Text\nlet hexToText = (hex) => {\n  let text = \"\";\n  for (let i = 0; i < hex.length; i += 2) {\n    let hexCode = hex.substr(i, 2);\n    let charCode = parseInt(hexCode, 16);\n    text",
+      "raw": {
+        "_id": "getSerialNumber",
+        "script": "// Mendapatkan SN ONT. Info https://wa.me/6281336128448\nlet serialNumber = \"\";\nlet sn = \"\";\nlet hexPart = \"\";\n\n// Hex To Text\nlet hexToText = (hex) => {\n  let text = \"\";\n  for (let i = 0; i < hex.length; i += 2) {\n    let hexCode = hex.substr(i, 2);\n    let charCode = parseInt(hexCode, 16);\n    text += String.fromCharCode(charCode);\n  }\n  return text;\n};\n// Check Hex Or String\nlet isHexadecimal = (str) => {\n  return /^[0-9A-Fa-f]+$/.test(str);\n};\nlet ponmode = \"\";\nlet pon = declare(\"VirtualParameters.getponmode\", {value: Date.now()});\n  if (pon.size) {\n    ponmode = pon.value[0];\n  }\nif (args[1].value) {\n  serialNumber = args[1].value[0];\n  if (!isHexadecimal(serialNumber)) {\n    sn = serialNumber;\n  } else if (serialNumber.includes(\"40ee15\")) {\n    sn = serialNumber;\n  } else if (ponmode.includes(\"EPON\")) {\n    sn = serialNumber;\n  } else {\n    hexPart = serialNumber.substr(0, 8);\n    let textPart = hexToText(hexPart);\n    sn = textPart + serialNumber.substr(8);\n  }\n  declare(\"DeviceID.SerialNumber\", null, {value: serialNumber});\n}\nelse {\n  let snvalue = declare(\"DeviceID.SerialNumber\", {value: Date.now()});\n  serialNumber = snvalue.value[0];\n  if (!isHexadecimal(serialNumber)) {\n    sn = serialNumber;\n  } else if (serialNumber.includes(\"40ee15\")) {\n    sn = serialNumber;\n  } else if (ponmode.includes(\"EPON\")) {\n    sn = serialNumber;\n  } else {\n    hexPart = serialNumber.substr(0, 8);\n    let textPart = hexToText(hexPart);\n    sn = textPart + serialNumber.substr(8);\n  }\n}\n\nreturn {writable: false, value: sn};\n"
+      }
+    }
+  ],
+  "configSample": {
+    "ui.filters.2.type": {
+      "value": "'string'"
+    },
+    "ui.device.5.components.0.type": {
+      "value": "'parameter-list'"
+    },
+    "ui.filters.1.type": {
+      "value": "'string'"
+    }
+  },
+  "deviceFields": {
+    "IP TR069": {
+      "vpName": "IPTR069",
+      "path": "IPTR069",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "Optic Rx Power": {
+      "vpName": "RXPower",
+      "path": "RXPower",
+      "unit": "dBm",
+      "source": "virtualParameter"
+    },
+    "WiFi Password": {
+      "vpName": "WlanPassword",
+      "path": "WlanPassword",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "Device Uptime": {
+      "vpName": "getdeviceuptime",
+      "path": "getdeviceuptime",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "PON Mode": {
+      "vpName": "getponmode",
+      "path": "getponmode",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "IP PPPoE": {
+      "vpName": "pppoeIP",
+      "path": "pppoeIP",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "MAC PPPoE": {
+      "vpName": "pppoeMac",
+      "path": "pppoeMac",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "PPPoE Password": {
+      "vpName": "pppoePassword",
+      "path": "pppoePassword",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "PPPoE Username": {
+      "vpName": "pppoeUsername",
+      "path": "pppoeUsername",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "Temperatur": {
+      "vpName": "gettemp",
+      "path": "gettemp",
+      "unit": "°C",
+      "source": "virtualParameter"
+    },
+    "Password User": {
+      "vpName": "userPassword",
+      "path": "userPassword",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "User Admin": {
+      "vpName": "userAdmin",
+      "path": "userAdmin",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "User SuperAdmin": {
+      "vpName": "superAdmin",
+      "path": "superAdmin",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "Password SuperAdmin": {
+      "vpName": "superPassword",
+      "path": "superPassword",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "PPPoE Username 2": {
+      "vpName": "pppoeUsername2",
+      "path": "pppoeUsername2",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "Perangkat Wifi Aktif": {
+      "vpName": "activedevices",
+      "path": "activedevices",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "PPP Uptime": {
+      "vpName": "getpppuptime",
+      "path": "getpppuptime",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "PON MAC": {
+      "vpName": "PonMac",
+      "path": "PonMac",
+      "unit": "",
+      "source": "virtualParameter"
+    },
+    "SN ONT": {
+      "vpName": "getSerialNumber",
+      "path": "getSerialNumber",
+      "unit": "",
+      "source": "virtualParameter"
+    }
+  }
+}

@@ -1,0 +1,2951 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-10-06",
+  "sources": [
+    "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html",
+    "https://cwmp-data-models.broadband-forum.org/tr-098-1-2-0.html",
+    "https://cwmp-data-models.broadband-forum.org/tr-181-2-5-0.html",
+    "https://cwmp-data-models.broadband-forum.org/tr-181-2-16-0-cwmp-full.xml",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-stack/blob/main/CHANGELOG.md",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-stack/blob/main/examples/default/presets/isp-saas-default.json",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/zte.yaml",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/huawei.yaml",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/fiberhome.yaml",
+    "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/tp-link.yaml",
+    "https://forum.genieacs.com/t/ont-pon-rx-power/3447",
+    "https://forum.genieacs.com/t/different-parameter-in-single-label/5925",
+    "https://forum.genieacs.com/t/creating-wan-on-bootstrap-sometimes-works-sometimes-not/7365",
+    "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384",
+    "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219",
+    "https://forum.genieacs.com/t/addobject-in-genieacs/5815",
+    "https://forum.genieacs.com/t/mac-device-does-not-generate/1910",
+    "https://forum.genieacs.com/t/huawei-hg8546m-tr-069-integration/2292",
+    "https://forum.genieacs.com/t/how-to-convert-optical-rx-value-to-dbm-few-value-are-ok-but-few-value-not-ok/4766",
+    "https://halny.com/knowledge-base/tr-069/",
+    "https://www.drinia.tech/wp-content/uploads/2025/05/Sercomm-FG824CD-Datasheet_20221128.pdf"
+  ],
+  "standard": {
+    "TR-098": [
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.Manufacturer",
+        "label": "Manufacturer",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.ManufacturerOUI",
+        "label": "Manufacturer OUI",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.ModelName",
+        "label": "Model Name",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.ProductClass",
+        "label": "Product Class",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.SerialNumber",
+        "label": "Serial Number",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.HardwareVersion",
+        "label": "Hardware Version",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+        "label": "Software Version",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.UpTime",
+        "label": "Up Time",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "device_info",
+        "unit": "seconds",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.ProvisioningCode",
+        "label": "Provisioning Code",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DeviceInfo.FirstUseDate",
+        "label": "First Use Date",
+        "type": "xsd:dateTime",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.EnableCWMP",
+        "label": "Enable CWMP",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.URL",
+        "label": "URL",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.Username",
+        "label": "Username",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.Password",
+        "label": "Password",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.PeriodicInformEnable",
+        "label": "Periodic Inform Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.PeriodicInformInterval",
+        "label": "Periodic Inform Interval",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": "seconds",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.PeriodicInformTime",
+        "label": "Periodic Inform Time",
+        "type": "xsd:dateTime",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.ParameterKey",
+        "label": "Parameter Key",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
+        "label": "Connection Request URL",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.ConnectionRequestUsername",
+        "label": "Connection Request Username",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.ConnectionRequestPassword",
+        "label": "Connection Request Password",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.KickURL",
+        "label": "Kick URL",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.DownloadProgressURL",
+        "label": "Download Progress URL",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.ManagementServer.UpgradesManaged",
+        "label": "Upgrades Managed",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "management_server",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDeviceNumberOfEntries",
+        "label": "WAN Device Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionNumberOfEntries",
+        "label": "WAN Connection Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.WANAccessType",
+        "label": "WAN Access Type",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.Layer1UpstreamMaxBitRate",
+        "label": "Layer1 Upstream Max Bit Rate",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wan",
+        "unit": "bps",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.Layer1DownstreamMaxBitRate",
+        "label": "Layer1 Downstream Max Bit Rate",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wan",
+        "unit": "bps",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnectionNumberOfEntries",
+        "label": "WANIP Connection Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ConnectionStatus",
+        "label": "Connection Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ConnectionType",
+        "label": "Connection Type",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.Name",
+        "label": "Name",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType",
+        "label": "Addressing Type",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress",
+        "label": "External IP Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask",
+        "label": "Subnet Mask",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway",
+        "label": "Default Gateway",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.Uptime",
+        "label": "Uptime",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wan",
+        "unit": "seconds",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MaxMTUSize",
+        "label": "Max MTU Size",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "wan",
+        "unit": "bytes",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ConnectionStatus",
+        "label": "Connection Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ConnectionType",
+        "label": "Connection Type",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Name",
+        "label": "Name",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+        "label": "Username",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password",
+        "label": "Password",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.PPPoEServiceName",
+        "label": "PP Po E Service Name",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.PPPoESessionID",
+        "label": "PP Po E Session ID",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Uptime",
+        "label": "Uptime",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "ppp",
+        "unit": "seconds",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.LastConnectionError",
+        "label": "Last Connection Error",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress",
+        "label": "External IP Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress",
+        "label": "MAC Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MaxMRUSize",
+        "label": "Max MRU Size",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": "bytes",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDeviceNumberOfEntries",
+        "label": "LAN Device Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "lan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.LANWLANConfigurationNumberOfEntries",
+        "label": "LANWLAN Configuration Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "lan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPServerEnable",
+        "label": "DHCP Server Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "lan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MinAddress",
+        "label": "Min Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "lan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MaxAddress",
+        "label": "Max Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "lan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress",
+        "label": "IP Interface IP Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "lan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceSubnetMask",
+        "label": "IP Interface Subnet Mask",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "lan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID",
+        "label": "SSID",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.BSSID",
+        "label": "BSSID",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel",
+        "label": "Channel",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.BeaconType",
+        "label": "Beacon Type",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase",
+        "label": "Key Passphrase",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase",
+        "label": "Key Passphrase",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations",
+        "label": "Total Associations",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TransmitPower",
+        "label": "Transmit Power",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "wlan",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Time.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Time.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Time.CurrentLocalTime",
+        "label": "Current Local Time",
+        "type": "xsd:dateTime",
+        "access": "read",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Time.LocalTimeZoneName",
+        "label": "Local Time Zone Name",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Time.NTPServer1",
+        "label": "NTP Server1",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Time.NTPServer2",
+        "label": "NTP Server2",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Time.NTPServer3",
+        "label": "NTP Server3",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DNSServers",
+        "label": "DNS Servers",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers",
+        "label": "DNS Servers",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.DNSServers",
+        "label": "DNS Servers",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DNS.SD.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DNS.SD.ServiceNumberOfEntries",
+        "label": "Service Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Layer3Forwarding.DefaultConnectionService",
+        "label": "Default Connection Service",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "layer3_forwarding",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Layer3Forwarding.ForwardNumberOfEntries",
+        "label": "Forward Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "layer3_forwarding",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Layer3Forwarding.Forwarding.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "layer3_forwarding",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Layer3Forwarding.Forwarding.1.DestIPAddress",
+        "label": "Dest IP Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "layer3_forwarding",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Layer3Forwarding.Forwarding.1.ForwardingMetric",
+        "label": "Forwarding Metric",
+        "type": "xsd:int",
+        "access": "readWrite",
+        "group": "layer3_forwarding",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Firewall.Config",
+        "label": "Config",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "firewall",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Firewall.Version",
+        "label": "Version",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "firewall",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.Firewall.LastChange",
+        "label": "Last Change",
+        "type": "xsd:dateTime",
+        "access": "read",
+        "group": "firewall",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.NATEnabled",
+        "label": "NAT Enabled",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMappingNumberOfEntries",
+        "label": "Port Mapping Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.PortMappingEnabled",
+        "label": "Port Mapping Enabled",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.ExternalPort",
+        "label": "External Port",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.InternalPort",
+        "label": "Internal Port",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.InternalClient",
+        "label": "Internal Client",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.PortMappingProtocol",
+        "label": "Port Mapping Protocol",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.PortMappingLeaseDuration",
+        "label": "Port Mapping Lease Duration",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": "seconds",
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.PortMappingDescription",
+        "label": "Port Mapping Description",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DownloadDiagnostics.DiagnosticsState",
+        "label": "Diagnostics State",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "download",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DownloadDiagnostics.Interface",
+        "label": "Interface",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "download",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DownloadDiagnostics.DownloadURL",
+        "label": "Download URL",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "download",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DownloadDiagnostics.DSCP",
+        "label": "DSCP",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "download",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DownloadDiagnostics.ROMTime",
+        "label": "ROM Time",
+        "type": "xsd:dateTime",
+        "access": "read",
+        "group": "download",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "InternetGatewayDevice.DownloadDiagnostics.TotalBytesReceived",
+        "label": "Total Bytes Received",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "download",
+        "unit": null,
+        "vendorExt": false
+      }
+    ],
+    "TR-181": [
+      {
+        "path": "Device.DeviceInfo.Manufacturer",
+        "label": "Manufacturer",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DeviceInfo.ManufacturerOUI",
+        "label": "Manufacturer OUI",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DeviceInfo.ModelName",
+        "label": "Model Name",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DeviceInfo.ProductClass",
+        "label": "Product Class",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DeviceInfo.SerialNumber",
+        "label": "Serial Number",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DeviceInfo.HardwareVersion",
+        "label": "Hardware Version",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DeviceInfo.SoftwareVersion",
+        "label": "Software Version",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "device_info",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DeviceInfo.UpTime",
+        "label": "Up Time",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "device_info",
+        "unit": "seconds",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.IPv4Enable",
+        "label": "I Pv4 Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.IPv6Enable",
+        "label": "I Pv6 Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.InterfaceNumberOfEntries",
+        "label": "Interface Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.Interface.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.Interface.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.Interface.1.Name",
+        "label": "Name",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.Interface.1.MaxMTUSize",
+        "label": "Max MTU Size",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "ip",
+        "unit": "bytes",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.Interface.1.IPv4Address.1.IPAddress",
+        "label": "IP Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.Interface.1.IPv4Address.1.SubnetMask",
+        "label": "Subnet Mask",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.IP.Interface.1.IPv4Address.1.AddressingType",
+        "label": "Addressing Type",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ip",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Ethernet.InterfaceNumberOfEntries",
+        "label": "Interface Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "ethernet",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Ethernet.Interface.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "ethernet",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Ethernet.Interface.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ethernet",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Ethernet.Interface.1.Name",
+        "label": "Name",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ethernet",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Ethernet.Interface.1.MACAddress",
+        "label": "MAC Address",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ethernet",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Ethernet.Interface.1.MaxBitRate",
+        "label": "Max Bit Rate",
+        "type": "xsd:int",
+        "access": "readWrite",
+        "group": "ethernet",
+        "unit": "Mbps",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Ethernet.Interface.1.DuplexMode",
+        "label": "Duplex Mode",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ethernet",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.RadioNumberOfEntries",
+        "label": "Radio Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wifi",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.SSIDNumberOfEntries",
+        "label": "SSID Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wifi",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.AccessPointNumberOfEntries",
+        "label": "Access Point Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "wifi",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.Radio.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "wifi",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.Radio.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "wifi",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.Radio.1.Channel",
+        "label": "Channel",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "wifi",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.Radio.1.TransmitPower",
+        "label": "Transmit Power",
+        "type": "xsd:int",
+        "access": "readWrite",
+        "group": "wifi",
+        "unit": "dBm",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.Radio.1.OperatingFrequencyBand",
+        "label": "Operating Frequency Band",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "wifi",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.SSID.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "ssid",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.SSID.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ssid",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.SSID.1.Name",
+        "label": "Name",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ssid",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.SSID.1.SSID",
+        "label": "SSID",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ssid",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.SSID.1.Alias",
+        "label": "Alias",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ssid",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.WiFi.SSID.1.LowerLayers",
+        "label": "Lower Layers",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ssid",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Optical.InterfaceNumberOfEntries",
+        "label": "Interface Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "optical",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Optical.Interface.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "optical",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Optical.Interface.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "optical",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Optical.Interface.1.OpticalSignalLevel",
+        "label": "Optical Signal Level",
+        "type": "xsd:int",
+        "access": "read",
+        "group": "optical",
+        "unit": "dBm",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Optical.Interface.1.TransmitOpticalLevel",
+        "label": "Transmit Optical Level",
+        "type": "xsd:int",
+        "access": "read",
+        "group": "optical",
+        "unit": "dBm",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Optical.Interface.1.LowerOpticalThreshold",
+        "label": "Lower Optical Threshold",
+        "type": "xsd:int",
+        "access": "read",
+        "group": "optical",
+        "unit": "dBm",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Optical.Interface.1.UpperOpticalThreshold",
+        "label": "Upper Optical Threshold",
+        "type": "xsd:int",
+        "access": "read",
+        "group": "optical",
+        "unit": "dBm",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.QoS.QueueNumberOfEntries",
+        "label": "Queue Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "qos",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.QoS.ClassificationNumberOfEntries",
+        "label": "Classification Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "qos",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.QoS.Queue.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "qos",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.QoS.Queue.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "qos",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.QoS.Queue.1.Alias",
+        "label": "Alias",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "qos",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.QoS.Classification.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "qos",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.QoS.Classification.1.Order",
+        "label": "Order",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "qos",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DNS.Client.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DNS.Client.ServerNumberOfEntries",
+        "label": "Server Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DNS.Client.Server.1.DNSServer",
+        "label": "DNS Server",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DNS.Relay.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DNS.Relay.ForwardNumberOfEntries",
+        "label": "Forward Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "dns",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.NAT.InterfaceSettingNumberOfEntries",
+        "label": "Interface Setting Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.NAT.PortMappingNumberOfEntries",
+        "label": "Port Mapping Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.NAT.PortMapping.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.NAT.PortMapping.1.ExternalPort",
+        "label": "External Port",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.NAT.PortMapping.1.InternalPort",
+        "label": "Internal Port",
+        "type": "xsd:unsignedInt",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.NAT.PortMapping.1.Protocol",
+        "label": "Protocol",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "nat",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.PPP.InterfaceNumberOfEntries",
+        "label": "Interface Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.PPP.Interface.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.PPP.Interface.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.PPP.Interface.1.Name",
+        "label": "Name",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.PPP.Interface.1.Username",
+        "label": "Username",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.PPP.Interface.1.Password",
+        "label": "Password",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "ppp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Time.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Time.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Time.LocalTimeZone",
+        "label": "Local Time Zone",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.Time.NTPServer1",
+        "label": "NTP Server1",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "time",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DHCPv4.Server.Pool.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "dhcp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DHCPv4.Server.Pool.1.MinAddress",
+        "label": "Min Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "dhcp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DHCPv4.Server.Pool.1.MaxAddress",
+        "label": "Max Address",
+        "type": "xsd:string",
+        "access": "readWrite",
+        "group": "dhcp",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.DHCPv4.Server.Pool.1.LeaseTime",
+        "label": "Lease Time",
+        "type": "xsd:int",
+        "access": "readWrite",
+        "group": "dhcp",
+        "unit": "seconds",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONUNumberOfEntries",
+        "label": "Onu Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.Name",
+        "label": "Name",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANINumberOfEntries",
+        "label": "Ani Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.EthernetUNINumberOfEntries",
+        "label": "Ethernet UNI Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.Enable",
+        "label": "Enable",
+        "type": "xsd:boolean",
+        "access": "readWrite",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.Status",
+        "label": "Status",
+        "type": "xsd:string",
+        "access": "read",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.TransceiverNumberOfEntries",
+        "label": "Transceiver Number Of Entries",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "pon",
+        "unit": null,
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.Transceiver.1.RxPower",
+        "label": "Rx Power",
+        "type": "xsd:int",
+        "access": "read",
+        "group": "pon",
+        "unit": "dBm",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.Transceiver.1.TxPower",
+        "label": "Tx Power",
+        "type": "xsd:int",
+        "access": "read",
+        "group": "pon",
+        "unit": "dBm",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.Transceiver.1.Bias",
+        "label": "Bias",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "pon",
+        "unit": "mA",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.Transceiver.1.Temperature",
+        "label": "Temperature",
+        "type": "xsd:int",
+        "access": "read",
+        "group": "pon",
+        "unit": "celsius",
+        "vendorExt": false
+      },
+      {
+        "path": "Device.XPON.ONU.1.ANI.1.Transceiver.1.Voltage",
+        "label": "Voltage",
+        "type": "xsd:unsignedInt",
+        "access": "read",
+        "group": "pon",
+        "unit": "V",
+        "vendorExt": false
+      }
+    ]
+  },
+  "models": [
+    {
+      "id": "zte-f660",
+      "vendor": "ZTE",
+      "productClass": "F660",
+      "oui": "001141",
+      "dataModel": "TR-098",
+      "aliases": [
+        "F660"
+      ],
+      "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/zte.yaml",
+      "notes": "genieacs-relay paths/vendors/zte.yaml lists product_class F660 (OUI 001141) and states ZTE uses the X_CT-COM_* / X_ZTE-COM_* subtrees for optical stats. optical.go reads GPON stats from InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.Stats (TxPower, RxPower, BiasCurrent). Forum topic 5925 shows an F660 PPPoE Username declared on WANConnectionDevice.2 - instance index varies per device, catalog uses WANConnectionDevice.1 (the default.yaml pppoe template).",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.Stats.TxPower",
+          "label": "Tx Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.Stats.RxPower",
+          "label": "Rx Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.X_CT-COM_GponInterfaceConfig.Stats.BiasCurrent",
+          "label": "Bias Current",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "mA",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password",
+          "label": "Password",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Enable",
+          "label": "Enable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "zte-f670l",
+      "vendor": "ZTE",
+      "productClass": "F670L",
+      "oui": "001141",
+      "dataModel": "TR-098",
+      "aliases": [
+        "F670L"
+      ],
+      "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go",
+      "notes": "optical.go documents the field layout observed on a real F670L running V9.0.10P1N12A under InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig: BiasCurrent (mA), RXPower (dBm), TXPower (dBm), TransceiverTemperature (degC), SupplyVoltage (mV) - all reported as xsd:string. Forum 3447 maps productClass F670L to ...WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.RXPower and forum 5925 maps F670L to ...WANIPConnection.2.X_ZTE-COM_VLANID (instance .2 as observed; .1 used for the ServiceList/VLANEnable entries whose base path is stated in the same thread).",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.TXPower",
+          "label": "TX Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.RXPower",
+          "label": "RX Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.BiasCurrent",
+          "label": "Bias Current",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "mA",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.TransceiverTemperature",
+          "label": "Transceiver Temperature",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "celsius",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.SupplyVoltage",
+          "label": "Supply Voltage",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "mV",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.2.X_ZTE-COM_VLANID",
+          "label": "X_ZTE-COM_VLANID",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/different-parameter-in-single-label/5925"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.X_ZTE-COM_ServiceList",
+          "label": "X_ZTE-COM_Service List",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/different-parameter-in-single-label/5925"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.X_ZTE-COM_VLANEnable",
+          "label": "X_ZTE-COM_VLAN Enable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/different-parameter-in-single-label/5925"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "huawei-eg8145v5",
+      "vendor": "Huawei",
+      "productClass": "EG8145V5",
+      "oui": "00E0FC",
+      "dataModel": "TR-098",
+      "aliases": [
+        "EG8145V5"
+      ],
+      "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/huawei.yaml",
+      "notes": "genieacs-relay paths/vendors/huawei.yaml lists product_class EG8145V5 (OUIs 00E0FC / 4C1FCC) and maps optical diagnostics to InternetGatewayDevice.X_HW_DEBUG.AdminTR069 (TxPower, RxPower only - optical.go notes Huawei usually does not expose bias/temp/voltage there). Forum 5925 EG8145V5 case uses ...WANConnectionDevice.2.WANIPConnection.1.X_HW_VLAN and ...UserInterface.X_HW_WebUserInfo.1.UserName.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.X_HW_DEBUG.AdminTR069.TxPower",
+          "label": "Tx Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.X_HW_DEBUG.AdminTR069.RxPower",
+          "label": "Rx Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/optical.go"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.X_HW_VLAN",
+          "label": "X_HW_VLAN",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/different-parameter-in-single-label/5925"
+        },
+        {
+          "path": "InternetGatewayDevice.UserInterface.X_HW_WebUserInfo.1.UserName",
+          "label": "User Name",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "tr069",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/different-parameter-in-single-label/5925"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "huawei-hg8546m",
+      "vendor": "Huawei",
+      "productClass": "HG8546M",
+      "oui": "00E0FC",
+      "dataModel": "TR-098",
+      "aliases": [
+        "HG8546M"
+      ],
+      "source": "https://forum.genieacs.com/t/ont-pon-rx-power/3447",
+      "notes": "Forum 3447 switch-case maps productClass HG8546M to InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower and the same thread declares ...X_GponInterafceConfig.TXPower for Huawei ONTs. Forum 7365 (HG8546M bootstrap script) uses basePath ...WANConnectionDevice.2.WANIPConnection with X_HW_SERVICELIST and X_HW_VLAN. Forum 2292 shows WLANConfiguration KeyPassphrase in the HG8546M TR-069 parameter list.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower",
+          "label": "RX Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/ont-pon-rx-power/3447"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower",
+          "label": "TX Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/ont-pon-rx-power/3447"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.X_HW_SERVICELIST",
+          "label": "X_HW_SERVICELIST",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/creating-wan-on-bootstrap-sometimes-works-sometimes-not/7365"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.X_HW_VLAN",
+          "label": "X_HW_VLAN",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/creating-wan-on-bootstrap-sometimes-works-sometimes-not/7365"
+        },
+        {
+          "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase",
+          "label": "Key Passphrase",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "wifi",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://forum.genieacs.com/t/huawei-hg8546m-tr-069-integration/2292"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "fiberhome-hg6243c",
+      "vendor": "FiberHome",
+      "productClass": "HG6243C",
+      "oui": "0019E0",
+      "dataModel": "TR-098",
+      "aliases": [
+        "HG6243C"
+      ],
+      "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/fiberhome.yaml",
+      "notes": "genieacs-relay paths/vendors/fiberhome.yaml lists product_class HG6243C (OUIs 0019E0 / 241815) and states: FiberHome ONTs generally follow TR-098 standard paths for PPPoE / DMZ / port-forwarding; no vendor overrides - optical paths inherit default.yaml. So every parameter below is the standard TR-098 path. No public dump of X_FH_* extensions for HG6243C was found; X_FH_* paths are verified on the sibling HG6143D (see model fiberhome-hg6143d).",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password",
+          "label": "Password",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Enable",
+          "label": "Enable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID",
+          "label": "SSID",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "wifi",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.PortMappingEnabled",
+          "label": "Port Mapping Enabled",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.ExternalPort",
+          "label": "External Port",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.InternalPort",
+          "label": "Internal Port",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.InternalClient",
+          "label": "Internal Client",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "fiberhome-an5506",
+      "vendor": "FiberHome",
+      "productClass": "AN5506-04-F",
+      "oui": "0019E0",
+      "dataModel": "TR-098",
+      "aliases": [
+        "AN5506-04-F",
+        "AN5506-04-FA",
+        "AN5506-04-FS"
+      ],
+      "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/vendors/fiberhome.yaml",
+      "notes": "genieacs-relay paths/vendors/fiberhome.yaml lists product_class AN5506-04-FA / AN5506-04-F / AN5506-04-FS (OUIs 0019E0 / 241815) and states FiberHome ONTs follow standard TR-098 paths with no vendor overrides. Parameters below are the standard TR-098 paths from that baseline.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password",
+          "label": "Password",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Enable",
+          "label": "Enable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID",
+          "label": "SSID",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "wifi",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.PortMappingEnabled",
+          "label": "Port Mapping Enabled",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.PortMapping.1.ExternalPort",
+          "label": "External Port",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "fiberhome-hg6143d",
+      "vendor": "FiberHome",
+      "productClass": "HG6143D",
+      "oui": "0019E0",
+      "dataModel": "TR-098",
+      "aliases": [
+        "HG6143D"
+      ],
+      "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384",
+      "notes": "Forum 7384 is a provisioning script that runs when productClass is HG6143D; it declares the X_FH_* extensions below on ...WANConnectionDevice.2.WANPPPConnection (instance auto-assigned, catalog uses .1) and the remote-web-login paths on InternetGatewayDevice. ...WANConnectionDevice.2.X_FH_WANGponLinkConfig is an object (no child parameters were printed in the source, so it is not listed as a parameter here).",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_FH_ServiceList",
+          "label": "X_FH_Service List",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_FH_ServiceType",
+          "label": "X_FH_Service Type",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_FH_ChannelMode",
+          "label": "X_FH_Channel Mode",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_FH_ConnectionMode",
+          "label": "X_FH_Connection Mode",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.X_FH_VLANID",
+          "label": "X_FH_VLANID",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384"
+        },
+        {
+          "path": "InternetGatewayDevice.X_FH_Remoteweblogin.webloginenable",
+          "label": "webloginenable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "tr069",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384"
+        },
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.X_FH_Account.X_FH_WebUserInfo.WebSuperPassword",
+          "label": "Web Super Password",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "tr069",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/the-issue-is-with-the-pppoe-provisioning-on-the-fiberhome-hg6143d-device/7384"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "nokia-g-140w",
+      "vendor": "Nokia",
+      "productClass": "G-140W",
+      "oui": null,
+      "dataModel": "TR-098",
+      "aliases": [
+        "G-140W-F",
+        "G-140W-C",
+        "G-140W-H"
+      ],
+      "source": "https://forum.genieacs.com/t/ont-pon-rx-power/3447",
+      "notes": "Forum 3447 switch-case maps productClass 'G-140W-F' (G-140W family) to InternetGatewayDevice.X_ALU_OntOpticalParam.RXPower for reading Nokia ONT Rx power. TXPower was not present in the source, so it is not listed. Remaining parameters are the standard TR-098 baseline.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.X_ALU_OntOpticalParam.RXPower",
+          "label": "RX Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/ont-pon-rx-power/3447"
+        },
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        }
+      ]
+    },
+    {
+      "id": "alcatel-lucent-g-2426g-a",
+      "vendor": "Alcatel-Lucent",
+      "productClass": "G-2426G-A",
+      "oui": null,
+      "dataModel": "TR-098",
+      "aliases": [
+        "G-2426G-A"
+      ],
+      "source": "https://forum.genieacs.com/t/ont-pon-rx-power/3447",
+      "notes": "CAVEAT: no public source with parameter paths for the G-2426G-A itself was found. InternetGatewayDevice.X_ALU_OntOpticalParam.RXPower is verified in forum 3447 on the sibling Alcatel-Lucent/Nokia ONTs G-2425G-A and G-140W-F (same X_ALU_ vendor subtree); treat it as a family path and confirm against the device before GPV. Other parameters are the standard TR-098 baseline.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.X_ALU_OntOpticalParam.RXPower",
+          "label": "RX Power",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/ont-pon-rx-power/3447"
+        },
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        }
+      ]
+    },
+    {
+      "id": "tp-link-xc220-g3v",
+      "vendor": "TP-Link",
+      "productClass": "XC220-G3v",
+      "oui": "B0BE76",
+      "dataModel": "TR-181",
+      "aliases": [
+        "XC220-G3v"
+      ],
+      "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219",
+      "notes": "genieacs-relay paths/vendors/tp-link.yaml lists product_class XC220-G3v (OUIs B0BE76 / 50C7BF / 48A2E6). Forum 7219 is a TR-181 provisioning script for this ONT and declares the X_TP_* extensions below with instance numbers 4 / 8 / 3 (instances vary per device; catalog keeps the source values). The script binds Device.X_TP_GPON.Link.4.LowerLayers to Device.Optical.Interface.1, which is why the standard optical path is included.",
+      "params": [
+        {
+          "path": "Device.X_TP_GPON.Link.4.LowerLayers",
+          "label": "Lower Layers",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "pon",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.Ethernet.VLANTermination.4.X_TP_VLANMode",
+          "label": "X_TP_VLAN Mode",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.Ethernet.VLANTermination.4.VLANID",
+          "label": "VLANID",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.IP.Interface.8.X_TP_ConnType",
+          "label": "X_TP_Conn Type",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.IP.Interface.8.X_TP_ServiceType",
+          "label": "X_TP_Service Type",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.IP.Interface.8.X_TP_IPv6AddrType",
+          "label": "X_TP_I Pv6 Addr Type",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "service",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.PPP.Interface.3.X_TP_UsernameDomainEnable",
+          "label": "X_TP_Username Domain Enable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.PPP.Interface.3.AuthenticationProtocol",
+          "label": "Authentication Protocol",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://forum.genieacs.com/t/hi-please-help-to-create-new-internet-interface-pppoe/7219"
+        },
+        {
+          "path": "Device.Optical.Interface.1.OpticalSignalLevel",
+          "label": "Optical Signal Level",
+          "type": "xsd:int",
+          "access": "read",
+          "group": "optical",
+          "unit": "dBm",
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-181-2-5-0.html"
+        }
+      ]
+    },
+    {
+      "id": "mitrastar-gpt-2541gnac",
+      "vendor": "Mitrastar",
+      "productClass": "GPT-2541GNAC",
+      "oui": null,
+      "dataModel": "TR-098",
+      "aliases": [
+        "GPT-2541GNAC"
+      ],
+      "source": "https://forum.genieacs.com/t/mac-device-does-not-generate/1910",
+      "notes": "The designation 'GPT-2541GAC' returns no results in any source; the real Mitrastar HGU is GPT-2541GNAC (forum 1910, a Movistar-issued GPT-2541GNAC). In that thread the PPPoE WAN MAC address is read from InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.*.MACAddress (catalog uses instance .1). Other parameters are the standard TR-098 baseline.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress",
+          "label": "MAC Address",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://forum.genieacs.com/t/mac-device-does-not-generate/1910"
+        },
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        }
+      ]
+    },
+    {
+      "id": "sercomm-fg824cw",
+      "vendor": "Sercomm",
+      "productClass": "FG824CW",
+      "oui": null,
+      "dataModel": "TR-098",
+      "aliases": [
+        "FG824CW"
+      ],
+      "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html",
+      "notes": "CAVEAT: no public source containing TR-069 parameter paths for FG824CW exists; the Sercomm FG824 family ONT that is publicly documented is the FG824CD (Vodafone/Lowi, see the Sercomm FG824CD datasheet: https://www.drinia.tech/wp-content/uploads/2025/05/Sercomm-FG824CD-Datasheet_20221128.pdf). Therefore only the TR-098 mandatory baseline paths are listed (any TR-069 CPE must expose DeviceInfo / ManagementServer, and default.yaml supplies the PPPoE credential template). Confirm against a live device before use.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion",
+          "label": "Software Version",
+          "type": "xsd:string",
+          "access": "read",
+          "group": "device_info",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.PeriodicInformInterval",
+          "label": "Periodic Inform Interval",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": "seconds",
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
+          "label": "Username",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Password",
+          "label": "Password",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "ppp",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://github.com/Cepat-Kilat-Teknologi/genieacs-relay/blob/main/paths/default.yaml"
+        }
+      ]
+    },
+    {
+      "id": "dlink-x-dlink-ru-cpe",
+      "vendor": "D-Link",
+      "productClass": null,
+      "oui": null,
+      "dataModel": "TR-098",
+      "aliases": [
+        "X_DLINK_RU"
+      ],
+      "source": "https://forum.genieacs.com/t/addobject-in-genieacs/5815",
+      "notes": "Forum 5815 (and 6008) show a D-Link router exposing the vendor subtree InternetGatewayDevice.UserInterface.X_DLINK_RU_CustomRemoteAccess.{i}; the source declares the four parameters below via SetParameterValues with explicit types (IPAddress xsd:string, Protocol xsd:string, PublicPort xsd:unsignedInt, Enable xsd:boolean), so access is readWrite. The D-Link model name is not stated in the source - productClass is therefore null.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.UserInterface.X_DLINK_RU_CustomRemoteAccess.1.Enable",
+          "label": "Enable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "tr069",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/addobject-in-genieacs/5815"
+        },
+        {
+          "path": "InternetGatewayDevice.UserInterface.X_DLINK_RU_CustomRemoteAccess.1.IPAddress",
+          "label": "IP Address",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "tr069",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/addobject-in-genieacs/5815"
+        },
+        {
+          "path": "InternetGatewayDevice.UserInterface.X_DLINK_RU_CustomRemoteAccess.1.Protocol",
+          "label": "Protocol",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "tr069",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/addobject-in-genieacs/5815"
+        },
+        {
+          "path": "InternetGatewayDevice.UserInterface.X_DLINK_RU_CustomRemoteAccess.1.PublicPort",
+          "label": "Public Port",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "tr069",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://forum.genieacs.com/t/addobject-in-genieacs/5815"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    },
+    {
+      "id": "halny-hl-4gmv",
+      "vendor": "HALNy",
+      "productClass": "HL-4GMV",
+      "oui": null,
+      "dataModel": "TR-098",
+      "aliases": [
+        "HL-4GMV"
+      ],
+      "source": "https://halny.com/knowledge-base/tr-069/",
+      "notes": "halny.com TR-069 knowledge base prints the HL-4GMV node tree: X_HALNY_Bind_* on ...WANConnectionDevice.2.WANIPConnection.1 (boolean, observed false) and ...WANConnectionDevice.2.X_CT-COM_WANGponLinkConfig with Enable=true, Mode=2, VLANIDMark=400, 802-1pMark=0. Values shown are the examples printed in that document.",
+      "params": [
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.X_HALNY_Bind_LAN1",
+          "label": "X_HALNY_Bind_LAN1",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://halny.com/knowledge-base/tr-069/"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.X_HALNY_Bind_SSID1",
+          "label": "X_HALNY_Bind_SSID1",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "port_mapping",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://halny.com/knowledge-base/tr-069/"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.X_CT-COM_WANGponLinkConfig.Enable",
+          "label": "Enable",
+          "type": "xsd:boolean",
+          "access": "readWrite",
+          "group": "pon",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://halny.com/knowledge-base/tr-069/"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.X_CT-COM_WANGponLinkConfig.Mode",
+          "label": "Mode",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "pon",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://halny.com/knowledge-base/tr-069/"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.X_CT-COM_WANGponLinkConfig.VLANIDMark",
+          "label": "VLANID Mark",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://halny.com/knowledge-base/tr-069/"
+        },
+        {
+          "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.X_CT-COM_WANGponLinkConfig.802-1pMark",
+          "label": "802-1p Mark",
+          "type": "xsd:unsignedInt",
+          "access": "readWrite",
+          "group": "vlan",
+          "unit": null,
+          "vendorExt": true,
+          "source": "https://halny.com/knowledge-base/tr-069/"
+        },
+        {
+          "path": "InternetGatewayDevice.ManagementServer.URL",
+          "label": "URL",
+          "type": "xsd:string",
+          "access": "readWrite",
+          "group": "management_server",
+          "unit": null,
+          "vendorExt": false,
+          "source": "https://cwmp-data-models.broadband-forum.org/tr-098-1-8-0.html"
+        }
+      ]
+    }
+  ]
+}

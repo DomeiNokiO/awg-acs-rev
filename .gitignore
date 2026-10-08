@@ -1,0 +1,34 @@
+# Dependensi
+node_modules/
+
+# Runtime state — JANGAN pernah masuk repo:
+# berisi hash password, sesi login aktif, dan data perangkat.
+# Garis miring di depan = HANYA folder data/ di root. Tanpa garis miring,
+# rule ini juga menelan packages/catalog/data/ (kumpulan parameter) yang
+# justru wajib ikut.
+/data/
+*.db
+*.db-shm
+*.db-wal
+*.secret
+
+# Artefak build (regenerabel: lihat README)
+apps/web/.next/
+apps/web/out/
+.next/
+out/
+
+# Editor & OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Cache TypeScript / build tooling
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Log & sementara
+*.log
+npm-debug.log*
+.tmp/
