@@ -126,8 +126,8 @@ Semua membutuhkan autentikasi kecuali `/api/health` dan `/api/login`.
 
 | Method | Path | Query / Body |
 |--------|------|--------------|
-| GET | `/api/devices` | `?q=` (serial/model/PPPoE/IP/SSID), `?online=1`, `?rxmax=-25` (RX < ambang dBm), `?group=`, `?tag=`, `?limit=` (≤500), `?offset=` → `{items,total}`. Tiap item memuat ringkasan `rx_power`, `tx_power`, `optical_temp`, `pppoe_user`, `pppoe_status`, `wan_ip`, `ssid`, `data_model` |
-| GET | `/api/devices/:id` | detail + parameter terakhir (password disamarkan → `has_*`) + `insight` `{optical, wan[], wlan[], general, dataModel}` |
+| GET | `/api/devices` | `?q=` (serial/model/PPPoE/IP/SSID), `?online=1`, `?rxmax=-25` (RX < ambang dBm), `?group=`, `?tag=`, `?limit=` (≤500), `?offset=` → `{items,total}`. Tiap item memuat ringkasan `rx_power`, `tx_power`, `optical_temp`, `pppoe_user`, `pppoe_status`, `wan_ip`, `ssid`, `cpu_usage` (%), `mem_usage` (% RAM terpakai), `data_model` |
+| GET | `/api/devices/:id` | detail + parameter terakhir (password disamarkan → `has_*`) + `insight` `{optical, wan[], wlan[], wcds[], connTypes, system, general, dataModel}` — `system` = `{cpu, cpuSource, memTotalKb, memFreeKb, memUsedPct, memSource}` |
 | POST | `/api/devices/:id/refresh` | antrekan baca ulang (path esensial + profil discovery); susulkan `/connect` agar segera Inform |
 | POST | `/api/devices/:id/config` | konfigurasi terstruktur, lihat tabel di bawah |
 | PUT | `/api/devices/:id` | **admin** — ubah `connection_request_url/user/pass`, `cwmp_user/pass`, `group_name`, `notes` |

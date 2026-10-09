@@ -39,6 +39,11 @@ export const PATH_INFO_098: string[] = [
   `${P}LANDevice.1.Hosts.HostNumberOfEntries`,
   // Suhu perangkat standar TR-098 (dipakai bila ONU tak punya suhu optik)
   `${P}DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value`,
+  // Beban CPU (%) & RAM (KiB) standar TR-098 (InternetGatewayDevice:1.9+).
+  // Leaf CPU/RAM milik vendor di bawah DeviceInfo ditemukan lewat discovery.
+  `${P}DeviceInfo.ProcessStatus.CPUUsage`,
+  `${P}DeviceInfo.MemoryStatus.Total`,
+  `${P}DeviceInfo.MemoryStatus.Free`,
 ];
 
 /** Keluarga vendor untuk memilih kandidat redaman yang dicoba lebih dulu. */
@@ -153,6 +158,10 @@ export const PATH_INFO_181: string[] = [
   'Device.ManagementServer.ConnectionRequestUsername',
   'Device.ManagementServer.PeriodicInformInterval',
   'Device.Hosts.HostNumberOfEntries',
+  'Device.DeviceInfo.ProcessStatus.CPUUsage',
+  'Device.DeviceInfo.MemoryStatus.Total',
+  'Device.DeviceInfo.MemoryStatus.Free',
+  'Device.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value',
 ];
 
 export const PATH_OPTICAL_181: string[] = [

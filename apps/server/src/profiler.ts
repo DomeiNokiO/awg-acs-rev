@@ -63,6 +63,13 @@ const WLAN_LEAF =
   'KeyPassphrase|PreSharedKey\\.1\\.KeyPassphrase|OperatingFrequencyBand|' +
   'X_[A-Za-z0-9-]+_(?:Band|FrequencyBand|RFBand|KeyPassphrase|WPAKey))';
 
+/**
+ * Leaf CPU/RAM vendor di bawah DeviceInfo (boleh satu objek vendor di
+ * antaranya). Nama yang jelas bukan beban (tipe, model, frekuensi, jumlah
+ * inti) dikecualikan di insight.ts.
+ */
+export const SYSTEM_LEAF = /^(?:InternetGatewayDevice|Device)\.DeviceInfo\.(?:X_[^.]+\.)?(?:X_[A-Za-z0-9-]+_)?[A-Za-z]*(?:Cpu|CPU|cpu|Mem|MEM|mem|Memory|RAM|Ram)[A-Za-z]*$/;
+
 const INTEREST: RegExp[] = [
   // ---- TR-098 ----
   new RegExp(`^${IGD}DeviceInfo\\.(?:Manufacturer|ModelName|SerialNumber|SoftwareVersion|HardwareVersion|UpTime|ProvisioningCode|TemperatureStatus\\.TemperatureSensor\\.\\d+\\.Value)$`),
@@ -74,6 +81,12 @@ const INTEREST: RegExp[] = [
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.(?:X_[^.]+|WANEponInterfaceConfig|WANGponInterfaceConfig)(?:\\.[^.]+)*\\.${OPT_LEAF}$`),
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.WANCommonInterfaceConfig\\.(?:WANAccessType|PhysicalLinkStatus|TotalBytesSent|TotalBytesReceived)$`),
   new RegExp(`^${IGD}LANDevice\\.\\d+\\.WLANConfiguration\\.\\d+\\.${WLAN_LEAF}$`),
+  // CPU/RAM: standar (ProcessStatus.CPUUsage, MemoryStatus.Total/Free) dan
+  // leaf vendor di bawah DeviceInfo yang namanya memuat CPU/Mem/RAM
+  // (X_HW_CpuUsed, X_ZTE-COM_…, X_CMCC_…, objek X_*.Memory…). Tabel proses
+  // (ProcessStatus.Process.N) sengaja tidak ikut — besar dan tak berguna.
+  /^(?:InternetGatewayDevice|Device)\.DeviceInfo\.(?:ProcessStatus\.CPUUsage|MemoryStatus\.(?:Total|Free))$/,
+  SYSTEM_LEAF,
   // ---- TR-181 ----
   /^Device\.DeviceInfo\.(?:Manufacturer|ModelName|SerialNumber|SoftwareVersion|HardwareVersion|UpTime)$/,
   /^Device\.Optical\.Interface\.\d+\.(?:Status|Name|OpticalSignalLevel|TransmitOpticalLevel|X_[^.]+)$/,

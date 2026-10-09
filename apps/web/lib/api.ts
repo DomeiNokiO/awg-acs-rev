@@ -144,6 +144,8 @@ export interface DeviceRow {
   wan_ip: string | null;
   ssid: string | null;
   summary_at: number | null;
+  cpu_usage: number | null;  // %
+  mem_usage: number | null;  // % RAM terpakai
 }
 
 /* ---- insight perangkat (GET /api/devices/:id → insight) ---- */
@@ -204,6 +206,15 @@ export interface WcdInfo {
   linkVlan: string | null;
 }
 
+export interface SystemInfo {
+  cpu: number | null;
+  cpuSource: string | null;
+  memTotalKb: number | null;
+  memFreeKb: number | null;
+  memUsedPct: number | null;
+  memSource: string | null;
+}
+
 export interface DeviceInsight {
   dataModel: 'TR-098' | 'TR-181' | null;
   optical: OpticalInfo;
@@ -211,6 +222,7 @@ export interface DeviceInsight {
   wcds: WcdInfo[];
   /** ConnectionType yang dipakai perangkat (mis. "PPPoE_Routed"). */
   connTypes: { ppp: string[]; ip: string[] };
+  system: SystemInfo;
   wlan: WlanInfo[];
   general: {
     model: string | null;

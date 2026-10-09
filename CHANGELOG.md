@@ -12,6 +12,38 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0e. CPU & RAM ONU (semua vendor dan tipe) + uji e2e di repo
+
+**Sumber data** (urutan prioritas):
+1. Standar BBF — `InternetGatewayDevice.DeviceInfo.ProcessStatus.CPUUsage` (%),
+   `DeviceInfo.MemoryStatus.Total` / `Free` (KiB); padanan TR-181 di `Device.DeviceInfo.`
+   (didefinisikan TR-098 sejak InternetGatewayDevice:1.9 dan TR-181).
+2. Leaf vendor di bawah `DeviceInfo` (langsung atau satu objek vendor) yang
+   namanya memuat CPU/Mem/RAM — mis. `X_HW_CpuUsed`, `X_HW_MemUsed`,
+   `X_ZTE-COM_…`, `X_CMCC_SysInfo.CPUUsage`, `…MemoryTotal/Free`. Nama vendor
+   tidak terdokumentasi publik, jadi dikenali dari hasil discovery (nama
+   non-beban seperti `CPUType`, `CPUFrequency`, `CoreNum` diabaikan).
+
+**Normalisasi**: persen boleh berakhiran `%`; memori vendor: < 8192 = MB,
+> 8 juta = byte, selain itu KiB. "…Used" bersama total = jumlah terpakai,
+"…Usage/Rate/Percent" = persen. ONU yang tidak melaporkan apa pun tampil "—"
+(tidak ditebak).
+
+**Beban**: CPU/RAM termasuk leaf panas → ikut GPV rutin yang sama (0 RPC
+tambahan). Path standar yang tidak ada ditandai dari hasil discovery
+`DeviceInfo.` tanpa GPV gagal. ONU yang sudah terdaftar di-upgrade ringan
+(PROFILE_VERSION 4): hanya `GetParameterNames DeviceInfo.` — terukur 2 RPC.
+
+**UI**: kolom **CPU / RAM** di daftar perangkat (hijau < 70%, kuning 70–90%,
+merah > 90%); baris CPU/RAM di kartu Informasi; tile Vendor, Model,
+Tipe (ProductClass), Hardware, CPU & RAM (bar + "x MB terpakai dari y MB").
+
+**API**: `GET /api/devices` → `cpu_usage`, `mem_usage`;
+`GET /api/devices/:id` → `insight.system` `{cpu, cpuSource, memTotalKb, memFreeKb, memUsedPct, memSource}`.
+
+**Uji e2e kini di repo** — `scripts/e2e/` (`npm run test:e2e`): simulator ONU
+ketat (`sim.mjs`) + suite `vendors`, `wan`, `api`, `system`.
+
 ## 0d. Tombol aksi "Bad Request", Connection Request Digest, koleksi dua tingkat
 
 **"Bad Request" di tombol aksi** (Hubungi, Pelajari struktur, Segarkan, Reboot,

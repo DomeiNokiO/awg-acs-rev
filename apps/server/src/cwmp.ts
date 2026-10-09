@@ -14,7 +14,7 @@ import {
 } from '@acs/core';
 import type { Database } from '@acs/core';
 import { checkCwmpAuth, type CwmpCredential } from './cwmp-auth.ts';
-import { discoveryRoots, wanRoots, profileFromNodes, MAX_PROFILE_PATHS } from './profiler.ts';
+import { discoveryRoots, wanRoots, profileFromNodes, MAX_PROFILE_PATHS, SYSTEM_LEAF } from './profiler.ts';
 import { essentialPaths, opticalCandidates, opticalFamily } from './modelpaths.ts';
 import { buildInsight, detectDataModel, summaryFields, type DataModel } from './insight.ts';
 
@@ -26,7 +26,27 @@ const MAX_BODY = 1024 * 1024;
  * dipetakan ulang otomatis saat Inform berikutnya — profil lama (sebelum
  * perbaikan discovery) tidak memuat redaman/PPPoE di WANConnectionDevice.N.
  */
-export const PROFILE_VERSION = 3;
+export const PROFILE_VERSION = 4;
+
+/**
+ * Upgrade profil ringan: dari versi ini ke PROFILE_VERSION cukup memetakan
+ * ulang subtree tertentu (bukan seluruh struktur). v3 → v4 menambah leaf
+ * CPU/RAM vendor di bawah DeviceInfo → hanya GPN DeviceInfo. (1 RPC).
+ */
+export const PROFILE_INCREMENTAL: Record<number, (root: string) => string[]> = {
+  3: (root) => [`${root}DeviceInfo.`],
+};
+
+/** Petakan ulang subtree untuk upgrade profil ringan; false = perlu penuh. */
+export function upgradeProfile(ctx: CwmpContext, deviceId: string, from: number): boolean {
+  const plan = PROFILE_INCREMENTAL[from];
+  if (!plan) return false;
+  const root = deviceModel(ctx, deviceId) === 'TR-181' ? 'Device.' : 'InternetGatewayDevice.';
+  ctx.db.setProfileVersion(deviceId, PROFILE_VERSION);
+  ctx.db.enqueueDiscoveryPaths(deviceId, plan(root));
+  continueDiscovery(ctx, deviceId);
+  return true;
+}
 
 /**
  * Subtree yang tidak ditelusuri pada mode BFS (firmware yang hanya
@@ -392,7 +412,8 @@ function deviceEssentials(ctx: CwmpContext, deviceId: string): string[] {
 const HOT_LEAF = /(?:RXPower|RxPower|TXPower|TxPower|OpticalSignalLevel|TransmitOpticalLevel|Temperature|TemperatureSensor\.\d+\.Value|ConnectionStatus|ExternalIPAddress|LastConnectionError|\.UpTime|\.Uptime|TotalAssociations|HostNumberOfEntries|AssociatedDeviceNumberOfEntries|Optical\.Interface\.\d+\.Status|PPP\.Interface\.\d+\.Status)$/;
 
 export function hotPaths(paths: string[]): string[] {
-  return paths.filter((p) => HOT_LEAF.test(p));
+  // CPU/RAM ikut dibaca tiap siklus: nilainya berubah terus.
+  return paths.filter((p) => HOT_LEAF.test(p) || SYSTEM_LEAF.test(p) || /DeviceInfo\.(?:ProcessStatus\.CPUUsage|MemoryStatus\.Free)$/.test(p));
 }
 
 /** Path yang dibaca tiap siklus koleksi: esensial ∪ profil discovery. */

@@ -42,6 +42,8 @@ export interface DeviceRow {
   wan_ip: string | null;
   ssid: string | null;
   summary_at: number | null;
+  cpu_usage: number | null;   // % beban CPU terakhir
+  mem_usage: number | null;   // % RAM terpakai terakhir
   /** 1 = URL/kredensial Connection Request diisi operator (jangan ditimpa). */
   cr_manual: number | null;
   /** Terakhir kali ACS mencoba memasang kredensial Connection Request. */
@@ -338,6 +340,7 @@ export class Database {
       ['optical_temp', 'REAL'], ['pppoe_user', 'TEXT'], ['pppoe_status', 'TEXT'],
       ['wan_ip', 'TEXT'], ['ssid', 'TEXT'], ['summary_at', 'INTEGER'],
       ['cr_manual', 'INTEGER'], ['cr_provisioned_at', 'INTEGER'],
+      ['cpu_usage', 'REAL'], ['mem_usage', 'REAL'],
     ] as const;
     for (const [name, type] of added) {
       if (!cols.includes(name)) this.db.exec(`ALTER TABLE devices ADD COLUMN ${name} ${type}`);
@@ -747,6 +750,10 @@ export class Database {
           last_collect_at = excluded.last_collect_at, next_collect_at = excluded.next_collect_at
       `).run(deviceId, now, now + Math.max(intervalMin, 5) * 60 * 1000, intervalMin);
     }
+  }
+
+  setProfileVersion(deviceId: string, version: number): void {
+    this.db.prepare('UPDATE collection SET profile_version = ? WHERE device_id = ?').run(version, deviceId);
   }
 
   markFullCollect(deviceId: string): void {

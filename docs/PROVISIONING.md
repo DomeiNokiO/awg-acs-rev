@@ -135,6 +135,21 @@ kandidat keluarganya ditolak perangkat, seluruh varian dicoba.
 Varian yang tidak ada di perangkat ditandai `invalid_param` (langsung dari
 hasil discovery, atau lewat split-on-fault) dan tidak dikirim lagi.
 
+### CPU & RAM
+
+| Sumber | Path | Satuan |
+|--------|------|--------|
+| Standar TR-098 / TR-181 | `{InternetGatewayDevice,Device}.DeviceInfo.ProcessStatus.CPUUsage` | % |
+| | `….DeviceInfo.MemoryStatus.Total` / `Free` | KiB |
+| Vendor (contoh) | `DeviceInfo.X_HW_CpuUsed`, `DeviceInfo.X_HW_MemUsed` | % |
+| | `DeviceInfo.X_<vendor>_<Objek>.CPUUsage`, `…MemoryTotal/MemoryFree/MemUsed` | %, KiB/MB/byte |
+
+Path standar ada di daftar esensial; leaf vendor ditemukan saat discovery
+`DeviceInfo.` dengan pola nama (CPU/Mem/RAM, kecuali Type/Model/Freq/Num/Core…).
+Keduanya termasuk leaf panas sehingga diperbarui di GPV rutin. Normalisasi
+memori vendor: < 8192 → MB, > 8 juta → byte, selain itu KiB; "…Used" bersama
+total = jumlah, "…Usage/Rate/Percent" = persen.
+
 ### Split-on-fault
 
 Satu path tidak valid membatalkan seluruh GPV (Fault 9005). Isi tiap batch

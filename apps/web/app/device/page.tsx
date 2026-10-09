@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import Shell from '@/components/Shell';
 import { api, type DeviceRow, type ParamRow, type EventRow, type DeviceInsight } from '@/lib/api';
 import { Configurator, wanLabel, type ConfigPreset } from '@/components/Configurator';
-import { rxLevel, RX_LABEL, fmtDbm, fmtUptime } from '@/lib/optical';
+import { rxLevel, RX_LABEL, fmtDbm, fmtUptime, loadLevel, fmtPct, fmtKb } from '@/lib/optical';
 import { connectionError } from '@/lib/wan';
 
 type Tab = 'summary' | 'config' | 'params' | 'commands' | 'discovered' | 'events' | 'tasks';
@@ -266,6 +266,11 @@ function DeviceBody() {
                   <tr><th>Firmware</th><td>{detail.device.software_version ?? '-'}</td></tr>
                   <tr><th>Data model</th><td>{detail.insight.dataModel ?? '-'}</td></tr>
                   <tr><th>Uptime</th><td>{fmtUptime(detail.insight.general.uptime)}</td></tr>
+                  <tr><th>CPU</th><td><span className={`load-${loadLevel(detail.insight.system.cpu)}`}>{fmtPct(detail.insight.system.cpu)}</span></td></tr>
+                  <tr><th>RAM</th><td>
+                    <span className={`load-${loadLevel(detail.insight.system.memUsedPct)}`}>{fmtPct(detail.insight.system.memUsedPct)}</span>
+                    {detail.insight.system.memTotalKb !== null && <span className="text-muted small"> dari {fmtKb(detail.insight.system.memTotalKb)}</span>}
+                  </td></tr>
                   <tr><th>Inform terakhir</th><td>{detail.device.last_inform_at ? new Date(detail.device.last_inform_at).toLocaleString('id-ID') : '-'}</td></tr>
                   <tr>
                     <th>Grup</th>
@@ -373,7 +378,7 @@ function DeviceBody() {
 
             <div className="card-body border-top">
               {tab === 'summary' && (
-                <SummaryPanel insight={detail.insight} onEdit={openConfig} onDeleteWan={deleteWan} onToggleWan={toggleWan} />
+                <SummaryPanel device={detail.device} insight={detail.insight} onEdit={openConfig} onDeleteWan={deleteWan} onToggleWan={toggleWan} />
               )}
 
               {tab === 'config' && (
@@ -628,7 +633,19 @@ function statusBadge(s: string | null) {
   return <span className={`badge ${ok ? 'text-bg-success' : 'text-bg-warning'}`}>{s}</span>;
 }
 
-function SummaryPanel({ insight, onEdit, onDeleteWan, onToggleWan }: {
+/** Bar pemakaian CPU/RAM (hijau < 70%, kuning 70–90%, merah > 90%). */
+function Usage({ pct }: { pct: number | null }) {
+  const lvl = loadLevel(pct);
+  return (
+    <div className={`usage ${lvl}`}>
+      <div className="bar"><i style={{ width: `${Math.min(100, Math.max(0, pct ?? 0))}%` }} /></div>
+      <span className="pct v" style={{ fontSize: '1.05rem' }}>{fmtPct(pct)}</span>
+    </div>
+  );
+}
+
+function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan }: {
+  device: DeviceRow;
   insight: DeviceInsight;
   onEdit: (p: Omit<ConfigPreset, 'nonce'>) => void;
   onDeleteWan: (base: string, label: string) => void;
@@ -637,6 +654,7 @@ function SummaryPanel({ insight, onEdit, onDeleteWan, onToggleWan }: {
   const o = insight.optical;
   const lvl = rxLevel(o.rx, o.los);
   const g = insight.general;
+  const sys = insight.system;
 
   return (
     <>
@@ -779,8 +797,36 @@ function SummaryPanel({ insight, onEdit, onDeleteWan, onToggleWan }: {
       <h4 className="small text-uppercase text-muted fw-semibold mb-2">
         <i className="fa-solid fa-circle-info me-2" />Perangkat
       </h4>
+      <div className="row g-2 mb-2">
+        <div className="col-6 col-md-3"><Tile k="Vendor" v={device.manufacturer || '—'} /></div>
+        <div className="col-6 col-md-3"><Tile k="Model" v={g.model ?? device.product_class ?? '—'} /></div>
+        <div className="col-6 col-md-3"><Tile k="Tipe (ProductClass)" v={device.product_class || '—'} /></div>
+        <div className="col-6 col-md-3"><Tile k="Hardware" v={g.hardwareVersion ?? device.hardware_version ?? '—'} /></div>
+      </div>
+      <div className="row g-2 mb-2">
+        <div className="col-md-6">
+          <div className="stat-tile h-100" title={sys.cpuSource ?? 'ONU tidak melaporkan beban CPU'}>
+            <div className="k">CPU</div>
+            <Usage pct={sys.cpu} />
+            <div className="small text-muted">{sys.cpu === null ? 'tidak dilaporkan ONU' : 'beban prosesor'}</div>
+          </div>
+        </div>
+        <div className="col-md-6">
+          <div className="stat-tile h-100" title={sys.memSource ?? 'ONU tidak melaporkan pemakaian RAM'}>
+            <div className="k">RAM</div>
+            <Usage pct={sys.memUsedPct} />
+            <div className="small text-muted">
+              {sys.memTotalKb !== null
+                ? sys.memFreeKb !== null
+                  ? `${fmtKb(sys.memTotalKb - sys.memFreeKb)} terpakai dari ${fmtKb(sys.memTotalKb)}`
+                  : `total ${fmtKb(sys.memTotalKb)}`
+                : sys.memUsedPct === null ? 'tidak dilaporkan ONU' : 'terpakai'}
+            </div>
+          </div>
+        </div>
+      </div>
       <div className="row g-2">
-        <div className="col-6 col-md-3"><Tile k="Model" v={g.model ?? '—'} /></div>
+        <div className="col-6 col-md-3"><Tile k="Firmware" v={g.softwareVersion ?? device.software_version ?? '—'} /></div>
         <div className="col-6 col-md-3"><Tile k="Uptime" v={fmtUptime(g.uptime)} /></div>
         <div className="col-6 col-md-3"><Tile k="IP LAN" v={g.lanIp ?? '—'} /></div>
         <div className="col-6 col-md-3"><Tile k="Host LAN" v={g.hosts ?? '—'} /></div>

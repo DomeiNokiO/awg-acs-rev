@@ -467,3 +467,14 @@ code, kbd, pre, .font-monospace { font-family: ui-monospace, SFMono-Regular, Men
 .stat-tile { border: 1px solid var(--line); border-radius: 12px; padding: .6rem .8rem; background: var(--surface); }
 .stat-tile .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-3); }
 .stat-tile .v { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---- Beban CPU/RAM ------------------------------------------------------- */
+.usage { display: flex; align-items: center; gap: .5rem; min-width: 7rem; }
+.usage .bar { flex: 1; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.usage .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
+.usage.warn .bar > i { background: var(--warn); }
+.usage.bad .bar > i { background: var(--bad); }
+.usage .pct { font-variant-numeric: tabular-nums; font-size: .8rem; min-width: 2.6rem; text-align: right; }
+.load-good { color: var(--ok); }
+.load-warn { color: var(--warn); font-weight: 600; }
+.load-bad { color: var(--bad); font-weight: 700; }

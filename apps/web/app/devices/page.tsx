@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Shell from '@/components/Shell';
 import { api, type DeviceRow } from '@/lib/api';
-import { rxLevel, RX_LABEL, fmtDbm } from '@/lib/optical';
+import { rxLevel, RX_LABEL, fmtDbm, loadLevel, fmtPct } from '@/lib/optical';
 
 function timeAgo(ts: number | null): string {
   if (!ts) return 'belum pernah';
@@ -68,7 +68,7 @@ function DevicesBody() {
     return () => clearTimeout(t);
   }, [load, q]);
 
-  const COLS = 9;
+  const COLS = 10;
 
   return (
     <>
@@ -111,6 +111,7 @@ function DevicesBody() {
                 <th>IP WAN</th>
                 <th className="text-end">Redaman RX<div className="small fw-normal text-muted">dBm</div></th>
                 <th className="text-end">TX<div className="small fw-normal text-muted">dBm</div></th>
+                <th>CPU / RAM</th>
                 <th>Terakhir Inform</th>
                 <th className="text-center">Antre</th>
               </tr>
@@ -155,6 +156,15 @@ function DevicesBody() {
                   <td className="small font-monospace">{d.wan_ip || <span className="text-muted">—</span>}</td>
                   <td className="text-end"><RxCell rx={d.rx_power} /></td>
                   <td className="text-end small num">{fmtDbm(d.tx_power)}</td>
+                  <td className="small num text-nowrap">
+                    {d.cpu_usage === null && d.mem_usage === null
+                      ? <span className="text-muted">—</span>
+                      : <>
+                          <span className={`load-${loadLevel(d.cpu_usage)}`} title="Beban CPU">{fmtPct(d.cpu_usage)}</span>
+                          <span className="text-muted"> / </span>
+                          <span className={`load-${loadLevel(d.mem_usage)}`} title="RAM terpakai">{fmtPct(d.mem_usage)}</span>
+                        </>}
+                  </td>
                   <td className="small text-muted">{timeAgo(d.last_inform_at)}</td>
                   <td className="text-center">
                     {d.pending_tasks > 0

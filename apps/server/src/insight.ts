@@ -458,6 +458,108 @@ export function extractGeneral(params: ParamLike[]): GeneralInfo {
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * CPU & RAM
+ * ------------------------------------------------------------------ */
+
+export interface SystemInfo {
+  /** Beban CPU (%) 0–100. */
+  cpu: number | null;
+  cpuSource: string | null;
+  /** RAM total & bebas (KiB), dan persentase terpakai. */
+  memTotalKb: number | null;
+  memFreeKb: number | null;
+  memUsedPct: number | null;
+  memSource: string | null;
+}
+
+/** Leaf di bawah DeviceInfo (boleh lewat satu objek: standar atau vendor). */
+const DI = /^(?:InternetGatewayDevice|Device)\.DeviceInfo\.(?:[^.]+\.)?([^.]+)$/;
+/** Nama yang memuat CPU/Mem tetapi bukan beban/kapasitas. */
+const NOT_LOAD = /(Type|Model|Name|Freq|Frequency|Num|Number|Count|Core|Cores|Arch|Vendor|Info|Version|Threshold|Alarm|Limit|Max|Min|Interval|Enable)$/i;
+
+/**
+ * KiB dari nilai memori vendor yang satuannya tidak didokumentasikan.
+ * RAM ONU realistis 32 MB – 4 GB: angka < 8192 dianggap MB, > 8 juta
+ * dianggap byte, selebihnya KiB (satuan standar TR-098/TR-181).
+ */
+function memKb(v: number): number {
+  if (v < 8192) return v * 1024;
+  if (v > 8_000_000) return Math.round(v / 1024);
+  return v;
+}
+
+/**
+ * CPU & RAM dari parameter standar (DeviceInfo.ProcessStatus.CPUUsage,
+ * DeviceInfo.MemoryStatus.Total/Free) atau leaf vendor apa pun di bawah
+ * DeviceInfo yang namanya memuat CPU/Mem/RAM (X_HW_CpuUsed, X_HW_MemUsed,
+ * X_ZTE-COM_…, X_CMCC_…, X_CT-COM_…). Nilai persen boleh berakhiran "%".
+ */
+export function extractSystem(params: ParamLike[]): SystemInfo {
+  const out: SystemInfo = { cpu: null, cpuSource: null, memTotalKb: null, memFreeKb: null, memUsedPct: null, memSource: null };
+  const cands = params.filter((p) => p.value !== '' && DI.test(p.path));
+  const leaf = (p: ParamLike): string => DI.exec(p.path)![1]!;
+  const pct = (v: string): number | null => {
+    const n = num(v);
+    return n !== null && n >= 0 && n <= 100 ? Math.round(n * 10) / 10 : null;
+  };
+
+  // CPU: standar dulu, lalu vendor.
+  const stdCpu = cands.find((p) => /\.ProcessStatus\.CPUUsage$/.test(p.path));
+  const vendorCpu = cands.filter((p) => /cpu/i.test(leaf(p)) && !NOT_LOAD.test(leaf(p)) && !/\.ProcessStatus\./.test(p.path));
+  for (const p of [stdCpu, ...vendorCpu]) {
+    if (!p) continue;
+    const v = pct(p.value);
+    if (v !== null) { out.cpu = v; out.cpuSource = p.path; break; }
+  }
+
+  // RAM standar (KiB).
+  const total = cands.find((p) => /\.MemoryStatus\.Total$/.test(p.path));
+  const free = cands.find((p) => /\.MemoryStatus\.Free$/.test(p.path));
+  const t = total ? num(total.value) : null;
+  const f = free ? num(free.value) : null;
+  if (t && t > 0 && f !== null && f >= 0 && f <= t) {
+    out.memTotalKb = t; out.memFreeKb = f;
+    out.memUsedPct = Math.round(((t - f) / t) * 1000) / 10;
+    out.memSource = total!.path;
+    return out;
+  }
+
+  // RAM vendor: total/free/used dalam satuan memori, atau persen terpakai.
+  const mem = cands.filter((p) => /mem|ram/i.test(leaf(p)) && !/cpu/i.test(leaf(p)) && !/\.MemoryStatus\./.test(p.path)
+    && !/(Type|Model|Name|Freq|Version|Threshold|Alarm|Limit|Interval|Enable)$/i.test(leaf(p)));
+  const vt = mem.find((p) => /total|size|capacity/i.test(leaf(p)));
+  const vf = mem.find((p) => /free|avail/i.test(leaf(p)));
+  const vu = mem.find((p) => /used|usage|util|occup|rate|percent|load/i.test(leaf(p)));
+  const tKb = vt ? num(vt.value) : null;
+  if (tKb && tKb > 0) {
+    const totalKb = memKb(tKb);
+    let freeKb: number | null = null;
+    // "…Used" bersama total = jumlah terpakai (satuan sama dengan total);
+    // "…Usage/Rate/Percent/Util" = persen.
+    const usedIsAmount = vu && /used?$/i.test(leaf(vu)) && !/usage|rate|percent|util/i.test(leaf(vu));
+    if (vf && num(vf.value) !== null) freeKb = memKb(num(vf.value)!);
+    else if (vu && num(vu.value) !== null && (usedIsAmount || num(vu.value)! > 100)) {
+      const used = num(vu.value)!;
+      // satuan "used" mengikuti satuan total mentah
+      freeKb = totalKb - Math.round((used / tKb) * totalKb);
+    }
+    if (freeKb !== null && freeKb >= 0 && freeKb <= totalKb) {
+      out.memTotalKb = totalKb; out.memFreeKb = freeKb;
+      out.memUsedPct = Math.round(((totalKb - freeKb) / totalKb) * 1000) / 10;
+      out.memSource = vt!.path;
+      return out;
+    }
+    out.memTotalKb = totalKb;
+    out.memSource = vt!.path;
+  }
+  if (vu) {
+    const v = pct(vu.value);
+    if (v !== null) { out.memUsedPct = v; out.memSource = vu.path; }
+  }
+  return out;
+}
+
 /** WANConnectionDevice yang ada di perangkat — kandidat lokasi WAN baru. */
 export interface WcdInfo {
   index: number;
@@ -504,6 +606,7 @@ export interface DeviceInsight {
   wan: WanConn[];
   wcds: WcdInfo[];
   connTypes: { ppp: string[]; ip: string[] };
+  system: SystemInfo;
   wlan: WlanInfo[];
   general: GeneralInfo;
 }
@@ -517,6 +620,7 @@ export function buildInsight(params: ParamLike[], model?: DataModel | null): Dev
     wan,
     wcds: dm === 'TR-181' ? [] : extractWcds(params),
     connTypes: observedConnTypes(wan),
+    system: extractSystem(params),
     wlan: extractWlan(params, dm),
     general: extractGeneral(params),
   };
@@ -535,6 +639,8 @@ export function summaryFields(ins: DeviceInsight): Record<string, string | numbe
     pppoe_status: ppp?.status ?? null,
     wan_ip: (ppp?.externalIp && ppp.externalIp !== '0.0.0.0' ? ppp.externalIp : null) ?? anyIp?.externalIp ?? null,
     ssid: ins.wlan.find((w) => w.ssid)?.ssid ?? null,
+    cpu_usage: ins.system.cpu,
+    mem_usage: ins.system.memUsedPct,
     summary_at: Date.now(),
   };
 }

@@ -62,8 +62,12 @@ packages/
 ```bash
 cd /root/acs
 
-# Uji (16 tes: sesi CWMP, SOAP, antrean, insight redaman/WAN/WiFi, profiler)
+# Uji unit (sesi CWMP, SOAP, antrean, redaman/WAN/WiFi, CPU/RAM, Digest, vendor WAN)
 npm test
+
+# Uji end-to-end: ACS sungguhan + simulator ONU ZTE/Huawei/FiberHome/CMCC
+# (sesi ketat, redaman, WAN multi-vendor, tombol aksi, CPU/RAM)
+npm run test:e2e
 
 # Periksa tipe di seluruh paket server
 npx tsc -p tsconfig.server.json
@@ -318,6 +322,7 @@ Dirancang supaya ribuan ONU bisa dikelola tanpa membebani CPU/RAM ONU yang kecil
 | Prioritas antrean | Perintah operator dikirim lebih dulu dari bacaan rutin |
 | Debounce Connection Request | Satu CR per 10 detik per ONU; bacaan akibat CR maks. sekali per menit |
 | Kandidat redaman per keluarga vendor + `invalid_param` | Path yang terbukti tidak ada tidak pernah dikirim lagi |
+| CPU/RAM ONU ikut leaf panas | Beban CPU & RAM terbaca di GPV rutin yang sama — tanpa RPC tambahan |
 | Satu proses Node + SQLite | Tanpa MongoDB/Redis/proses terpisah — ±100 MB RAM |
 
 Terukur dengan simulator ONU (ZTE/Huawei/FiberHome/CMCC): pemetaan awal 42–50 RPC

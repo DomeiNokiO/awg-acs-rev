@@ -13,7 +13,7 @@ import Fastify from 'fastify';
 import { Database, TaskQueue, hashPassword } from '@acs/core';
 import {
   registerCwmpRoutes, type CwmpContext, enqueueRead, enqueueDiscover as enqueueDiscovery,
-  continueDiscovery, collectPaths, hotPaths, maybeProvisionCrCreds, PROFILE_VERSION,
+  continueDiscovery, collectPaths, hotPaths, maybeProvisionCrCreds, upgradeProfile, PROFILE_VERSION,
 } from './cwmp.ts';
 import { registerApiRoutes } from './api.ts';
 import { loadCatalog } from './catalog.ts';
@@ -157,7 +157,10 @@ async function main(): Promise<void> {
       // discovery per-perangkat) dipetakan ulang otomatis. Discovery yang
       // belum tamat dilanjutkan dari titik terakhir.
       const col = db.getCollection(deviceId);
-      if (!col || (col.profile_version ?? 0) < PROFILE_VERSION) {
+      if (col && (col.profile_version ?? 0) < PROFILE_VERSION && col.discovery_done
+        && upgradeProfile(ctx, deviceId, col.profile_version ?? 0)) {
+        // Upgrade profil ringan (subtree saja) — lanjut ke pembacaan biasa.
+      } else if (!col || (col.profile_version ?? 0) < PROFILE_VERSION) {
         // Pemetaan baru: pembacaan dilakukan oleh discovery itu sendiri
         // (leaf baru dibaca per subtree, path esensial setelah selesai).
         enqueueDiscovery(ctx, deviceId);

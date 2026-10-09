@@ -15,7 +15,8 @@
     "dev:server": "npm run dev -w apps/server",
     "dev:web": "npm run dev -w apps/web",
     "build": "npm run build -w apps/web",
-    "test": "node --test packages/acs-core/test/*.test.ts apps/server/test/*.test.ts"
+    "test": "node --test packages/acs-core/test/*.test.ts apps/server/test/*.test.ts",
+    "test:e2e": "node scripts/e2e/run-all.mjs"
   },
   "devDependencies": {
     "@fastify/static": "^10.1.5",
