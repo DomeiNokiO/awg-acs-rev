@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  normalizePower, extractOptical, extractWan, extractWlan, primaryPppoe, buildInsight, summaryFields,
+  normalizePower, extractOptical, extractWan, extractWlan, primaryPppoe, buildInsight, summaryFields, applySecrets, revealSecret,
 } from '../src/insight.ts';
 import { isInterestingLeaf, profileFromNodes } from '../src/profiler.ts';
 
@@ -150,4 +150,51 @@ test('extractOptical: data lapangan — ZTE F660 CMCC (0.1 µW) dan FiberHome EP
   assert.equal(fh.rx, -23.1);
   assert.equal(fh.los, false);
   assert.match(fh.source ?? '', /X_FH_GponInterfaceConfig/);
+});
+
+test('sandi terbuka: bintang/kosong bukan sandi, PSK hex dilewati, SSID tersembunyi (standar & vendor)', () => {
+  assert.equal(revealSecret('********'), null);
+  assert.equal(revealSecret(''), null);
+  assert.equal(revealSecret('abc12345'), 'abc12345');
+  const b = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.';
+  const w = extractWlan([
+    P(`${b}1.SSID`, 'A'), P(`${b}1.KeyPassphrase`, '********'),
+    P(`${b}1.PreSharedKey.1.PreSharedKey`, 'a'.repeat(64)), P(`${b}1.PreSharedKey.1.KeyPassphrase`, 'kunciRumah'),
+    P(`${b}1.SSIDAdvertisementEnabled`, 'false'),
+    P(`${b}2.SSID`, 'B'), P(`${b}2.X_CT-COM_SSIDHide`, '1'),
+    P(`${b}3.SSID`, 'C'), P(`${b}3.PreSharedKey.1.PreSharedKey`, 'a'.repeat(64)),
+  ]);
+  assert.equal(w[0]!.passphrase, 'kunciRumah');
+  assert.equal(w[0]!.hidden, true);
+  assert.equal(w[0]!.hiddenPath, `${b}1.SSIDAdvertisementEnabled`);
+  assert.equal(w[1]!.hidden, true);
+  assert.equal(w[1]!.hiddenPath, `${b}2.X_CT-COM_SSIDHide`);
+  assert.equal(w[2]!.passphrase, null);
+  assert.equal(w[2]!.hidden, null);
+});
+
+test('applySecrets: nilai ONU menang bila lebih baru, cadangan ACS bila ONU kosong/lebih lama', () => {
+  const wcd = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.';
+  const wl = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.';
+  const params = [
+    { path: `${wcd}Username`, value: 'u1', updated_at: 1000 },
+    { path: `${wcd}Password`, value: '', updated_at: 1000 },
+    { path: `${wl}SSID`, value: 'X', updated_at: 1000 },
+    { path: `${wl}KeyPassphrase`, value: 'lamaONU1', updated_at: 1000 },
+  ];
+  // ACS menyetel setelah pembacaan terakhir → nilai ACS yang tampil.
+  let ins = applySecrets(buildInsight(params), [
+    { path: `${wcd}Password`, value: 'pppBaru1', set_at: 2000 },
+    { path: `${wl}KeyPassphrase`, value: 'baruACS1', set_at: 2000 },
+  ]);
+  assert.equal(ins.wan[0]!.password, 'pppBaru1');
+  assert.equal(ins.wan[0]!.passwordSource, 'acs');
+  assert.equal(ins.wlan[0]!.passphrase, 'baruACS1');
+  assert.equal(ins.wlan[0]!.passphraseSource, 'acs');
+  // ONU dibaca setelah ACS menyetel (mis. sandi diganti dari web ONU) → nilai ONU.
+  ins = applySecrets(buildInsight(params), [{ path: `${wl}KeyPassphrase`, value: 'baruACS1', set_at: 500 }]);
+  assert.equal(ins.wlan[0]!.passphrase, 'lamaONU1');
+  assert.equal(ins.wlan[0]!.passphraseSource, 'onu');
+  assert.equal(ins.wan[0]!.password, null);
+  assert.ok(!('_passwordReadAt' in ins.wan[0]!));
 });

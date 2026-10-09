@@ -185,6 +185,18 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 
+-- Sandi (WiFi / PPPoE) yang terakhir DITULIS ACS dan diterima ONU. Banyak
+-- firmware mengembalikan string kosong saat sandi dibaca (TR-098: "When read,
+-- this parameter returns an empty string"), jadi nilai ini menjadi cadangan
+-- tampilan bila ONU tidak mengirim sandinya.
+CREATE TABLE IF NOT EXISTS device_secret (
+  device_id TEXT NOT NULL,
+  path TEXT NOT NULL,
+  value TEXT NOT NULL,
+  set_at INTEGER NOT NULL,
+  PRIMARY KEY (device_id, path)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS discovered_params (
   product_class TEXT NOT NULL,
   vendor TEXT NOT NULL DEFAULT '',
@@ -553,6 +565,27 @@ export class Database {
 
   purgeExpiredSessions(): void {
     this.db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
+  }
+
+  /* ---------------- sandi yang disetel lewat ACS ---------------- */
+
+  setSecrets(deviceId: string, items: { path: string; value: string }[]): void {
+    if (!items.length) return;
+    const st = this.db.prepare(`
+      INSERT INTO device_secret (device_id, path, value, set_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(device_id, path) DO UPDATE SET value = excluded.value, set_at = excluded.set_at`);
+    const now = Date.now();
+    for (const it of items) st.run(deviceId, it.path, it.value, now);
+  }
+
+  getSecrets(deviceId: string): { path: string; value: string; set_at: number }[] {
+    return this.db.prepare('SELECT path, value, set_at FROM device_secret WHERE device_id = ?')
+      .all(deviceId) as { path: string; value: string; set_at: number }[];
+  }
+
+  /** Reset pabrik → sandi yang pernah disetel ACS tidak berlaku lagi. */
+  clearSecrets(deviceId: string): void {
+    this.db.prepare('DELETE FROM device_secret WHERE device_id = ?').run(deviceId);
   }
 
   /* ---------------- discovered params ---------------- */

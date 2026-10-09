@@ -14,7 +14,7 @@ import {
 } from '@acs/core';
 import type { Database } from '@acs/core';
 import { checkCwmpAuth, type CwmpCredential } from './cwmp-auth.ts';
-import { discoveryRoots, wanRoots, profileFromNodes, MAX_PROFILE_PATHS, SYSTEM_LEAF } from './profiler.ts';
+import { discoveryRoots, wanRoots, profileFromNodes, isInterestingLeaf, MAX_PROFILE_PATHS, SYSTEM_LEAF } from './profiler.ts';
 import { essentialPaths, opticalCandidates, opticalFamily } from './modelpaths.ts';
 import { buildInsight, detectDataModel, summaryFields, type DataModel } from './insight.ts';
 import type { LiveTraffic } from './live.ts';
@@ -27,7 +27,7 @@ const MAX_BODY = 1024 * 1024;
  * dipetakan ulang otomatis saat Inform berikutnya — profil lama (sebelum
  * perbaikan discovery) tidak memuat redaman/PPPoE di WANConnectionDevice.N.
  */
-export const PROFILE_VERSION = 5;
+export const PROFILE_VERSION = 6;
 
 /**
  * Upgrade profil ringan: dari versi ini ke PROFILE_VERSION cukup memetakan
@@ -38,7 +38,40 @@ export const PROFILE_INCREMENTAL: Record<number, (root: string) => string[]> = {
   3: (root) => [`${root}DeviceInfo.`],
   // v4 → v5: counter byte koneksi WAN (Stats.*) untuk trafik live.
   4: (root) => (root === 'Device.' ? ['Device.PPP.Interface.', 'Device.IP.Interface.'] : [`${root}WANDevice.`]),
+  // v5 → v6: sandi PPPoE/WiFi & siaran SSID — tanpa GPN, cukup dari hasil
+  // discovery yang sudah tersimpan (extendProfileLocally).
+  5: () => [],
 };
+
+/** Objek milik perangkat ini yang leaf-nya boleh ditambah dari data discovery model. */
+const OWNER_OBJECT = [
+  /^(InternetGatewayDevice\.WANDevice\.\d+\.WANConnectionDevice\.\d+\.WAN(?:PPP|IP)Connection\.\d+\.)/,
+  /^(InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.\d+\.)/,
+  /^(Device\.PPP\.Interface\.\d+\.)/,
+  /^(Device\.WiFi\.AccessPoint\.\d+\.)/,
+];
+
+/**
+ * Tambah leaf yang kini dianggap menarik dari struktur yang SUDAH dipetakan
+ * (discovered_params model ini) — tanpa RPC ke ONU. Hanya di objek yang sudah
+ * ada di profil perangkat ini, jadi nomor instansnya pasti milik perangkat
+ * ini. Mengembalikan leaf baru (untuk langsung dibaca).
+ */
+function extendProfileLocally(ctx: CwmpContext, deviceId: string): string[] {
+  const dev = ctx.db.getDevice(deviceId);
+  if (!dev?.product_class) return [];
+  const prof = currentProfile(ctx, deviceId);
+  const have = new Set(prof);
+  const owners = new Set<string>();
+  for (const p of prof) for (const re of OWNER_OBJECT) { const m = re.exec(p); if (m) owners.add(m[1]!); }
+  const fresh = ctx.db.getDiscovered(dev.product_class).map((r) => r.path).filter((p) => {
+    if (have.has(p) || !isInterestingLeaf(p)) return false;
+    for (const re of OWNER_OBJECT) { const m = re.exec(p); if (m) return owners.has(m[1]!); }
+    return false;
+  });
+  if (fresh.length) ctx.db.setCollectionProfile(deviceId, [...prof, ...fresh].slice(0, MAX_PROFILE_PATHS), false);
+  return fresh;
+}
 
 /** Petakan ulang subtree untuk upgrade profil ringan; false = perlu penuh. */
 export function upgradeProfile(ctx: CwmpContext, deviceId: string, from: number): boolean {
@@ -51,9 +84,14 @@ export function upgradeProfile(ctx: CwmpContext, deviceId: string, from: number)
     steps.push(plan);
   }
   const root = deviceModel(ctx, deviceId) === 'TR-181' ? 'Device.' : 'InternetGatewayDevice.';
+  const fresh = extendProfileLocally(ctx, deviceId);
   ctx.db.setProfileVersion(deviceId, PROFILE_VERSION);
-  ctx.db.enqueueDiscoveryPaths(deviceId, [...new Set(steps.flatMap((p) => p(root)))]);
-  continueDiscovery(ctx, deviceId);
+  const subtrees = [...new Set(steps.flatMap((p) => p(root)))];
+  if (subtrees.length) {
+    ctx.db.enqueueDiscoveryPaths(deviceId, subtrees);
+    continueDiscovery(ctx, deviceId);
+  }
+  if (fresh.length) enqueueRead(ctx, deviceId, fresh);
   return true;
 }
 
@@ -625,7 +663,14 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
         const payload = parsePayload(task.payload);
         // Baca balik nilai yang ditulis supaya UI langsung menampilkan
         // kondisi terbaru (kecuali sandi — tidak perlu dibaca ulang).
-        const params = Array.isArray(payload.params) ? payload.params as { name?: unknown }[] : [];
+        const params = Array.isArray(payload.params) ? payload.params as { name?: unknown; value?: unknown }[] : [];
+        // Sandi WiFi/PPPoE yang diterima ONU disimpan sebagai cadangan
+        // tampilan: banyak firmware mengembalikan string kosong saat sandi
+        // dibaca. Kredensial ManagementServer (CR/ACS) tidak termasuk.
+        ctx.db.setSecrets(deviceId, params.filter((p): p is { name: string; value: string } =>
+          typeof p.name === 'string' && typeof p.value === 'string' && p.value !== ''
+          && /(?:\.Password|KeyPassphrase|PreSharedKey)$/.test(p.name) && !/\.ManagementServer\./.test(p.name))
+          .map((p) => ({ path: p.name, value: p.value })));
         const back = params
           .map((p) => (typeof p.name === 'string' ? p.name : ''))
           .filter((n) => n && !/Password|KeyPassphrase|PreSharedKey/i.test(n));
@@ -734,6 +779,7 @@ function applyResult(ctx: CwmpContext, deviceId: string, result: RpcResult): voi
       for (const t of ctx.db.listTasks(deviceId, 50) as { id: string; kind: string; status: string }[]) {
         if (t.kind === kind && t.status === 'pending') ctx.db.updateTask(t.id, 'done', 'diterima perangkat');
       }
+      if (kind === 'factory_reset') ctx.db.clearSecrets(deviceId);
       ctx.db.addEvent(deviceId, kind, kind === 'reboot'
         ? 'Perangkat menerima perintah reboot'
         : 'Perangkat menerima perintah reset pabrik');

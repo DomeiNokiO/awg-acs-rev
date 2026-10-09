@@ -54,14 +54,14 @@ const OPT_LEAF = '(?:RXPower|RxPower|TXPower|TxPower|RXOpticalPower|RxOpticalPow
 const CONN_LEAF =
   '(?:Enable|Name|Alias|Username|UserName|ConnectionStatus|ConnectionType|AddressingType|ExternalIPAddress|' +
   'SubnetMask|DefaultGateway|RemoteIPAddress|DNSServers|MACAddress|Uptime|LastConnectionError|NATEnabled|' +
-  'TransportType|ConnectionTrigger|PPPAuthenticationProtocol|PPPoEServiceName|' +
+  'TransportType|ConnectionTrigger|PPPAuthenticationProtocol|PPPoEServiceName|Password|' +
   'X_[A-Za-z0-9-]+_(?:VLANID|VLANIDMark|VLAN|VLANEnable|VLANMode|8021p|802-1pMark|PRI|' +
   'ServiceList|SERVICELIST|ServiceType|ConnectionMode|LanInterface|IPMode|IPForwardList)|' +
   'X_HW_LANBIND\\.(?:Lan|SSID)\\d+Enable|Stats\\.Ethernet(?:Bytes|Packets)(?:Sent|Received)|VLANID)';
 const WLAN_LEAF =
   '(?:Enable|Status|SSID|BeaconType|Channel|AutoChannelEnable|Standard|TotalAssociations|SSIDAdvertisementEnabled|' +
-  'KeyPassphrase|PreSharedKey\\.1\\.KeyPassphrase|OperatingFrequencyBand|' +
-  'X_[A-Za-z0-9-]+_(?:Band|FrequencyBand|RFBand|KeyPassphrase|WPAKey))';
+  'KeyPassphrase|PreSharedKey\\.1\\.KeyPassphrase|PreSharedKey\\.1\\.PreSharedKey|OperatingFrequencyBand|' +
+  'X_[A-Za-z0-9-]+_(?:Band|FrequencyBand|RFBand|KeyPassphrase|WPAKey|SSIDHide|HideSSID|SSIDHidden|HiddenSSID))';
 
 /**
  * Leaf CPU/RAM vendor di bawah DeviceInfo (boleh satu objek vendor di
@@ -90,13 +90,13 @@ const INTEREST: RegExp[] = [
   // ---- TR-181 ----
   /^Device\.DeviceInfo\.(?:Manufacturer|ModelName|SerialNumber|SoftwareVersion|HardwareVersion|UpTime)$/,
   /^Device\.Optical\.Interface\.\d+\.(?:Status|Name|OpticalSignalLevel|TransmitOpticalLevel|X_[^.]+)$/,
-  /^Device\.PPP\.Interface\.\d+\.(?:Enable|Status|ConnectionStatus|Name|Alias|Username|LowerLayers|LastConnectionError|Stats\.Bytes(?:Sent|Received))$/,
+  /^Device\.PPP\.Interface\.\d+\.(?:Enable|Status|ConnectionStatus|Name|Alias|Username|Password|LowerLayers|LastConnectionError|Stats\.Bytes(?:Sent|Received))$/,
   /^Device\.IP\.Interface\.\d+\.(?:Enable|Status|Name|Alias|LowerLayers|IPv4Address\.\d+\.IPAddress|Stats\.Bytes(?:Sent|Received))$/,
   /^Device\.Optical\.Interface\.\d+\.Stats\.Bytes(?:Sent|Received)$/,
   /^Device\.Ethernet\.VLANTermination\.\d+\.(?:Enable|Status|Name|Alias|VLANID|LowerLayers)$/,
   /^Device\.WiFi\.SSID\.\d+\.(?:Enable|Status|SSID|LowerLayers)$/,
   /^Device\.WiFi\.Radio\.\d+\.(?:Enable|OperatingFrequencyBand|Channel)$/,
-  /^Device\.WiFi\.AccessPoint\.\d+\.(?:Enable|SSIDReference|AssociatedDeviceNumberOfEntries|Security\.ModeEnabled|Security\.KeyPassphrase)$/,
+  /^Device\.WiFi\.AccessPoint\.\d+\.(?:Enable|SSIDReference|AssociatedDeviceNumberOfEntries|SSIDAdvertisementEnabled|Security\.ModeEnabled|Security\.KeyPassphrase)$/,
 ];
 
 /** Leaf yang layak masuk profil koleksi. */

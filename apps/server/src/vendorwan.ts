@@ -32,21 +32,41 @@ export interface Fill { name: string; type: XsdType; value: string }
 
 export type Family = 'huawei' | 'zte' | 'fiberhome' | 'cmcc' | 'ct' | 'cu' | 'nokia';
 
+/** Awalan ekstensi per keluarga (di area konfigurasi WAN). */
+const FAMILY_PREFIX: [Family, RegExp][] = [
+  ['huawei', /\.X_HW_/], ['zte', /\.X_ZTE-COM_/], ['fiberhome', /\.X_FH_/],
+  ['cmcc', /\.X_CMCC_/], ['cu', /\.X_CU_/], ['ct', /\.X_CT-COM_/],
+];
+
 /**
- * Keluarga vendor untuk konfigurasi WAN. Bukti path selalu menang atas nama
- * pabrikan: firmware operator di hardware merek lain memakai ekstensi
- * operatornya. Contoh lapangan: ZTE F660 V9.0.0P1T7 melaporkan pabrikan
- * "ZTE" tetapi VLAN/ServiceList-nya `X_CMCC_*` (firmware China Mobile).
+ * Keluarga vendor untuk konfigurasi WAN — ditentukan dari ekstensi yang
+ * BENAR-BENAR dipakai ONU di area WAN (WANConnectionDevice: VLAN,
+ * ServiceList, binding, link config), bukan dari nama pabrikan. Hardware
+ * yang sama bisa membawa firmware berbeda:
+ *  - ZTE F660 ORI → `X_ZTE-COM_*` → 'zte';
+ *  - ZTE F660 firmware suntikan China Mobile (V9.0.0P1T7, lapangan) →
+ *    pabrikan tetap "ZTE" tetapi `X_CMCC_*` → 'cmcc'.
+ * Firmware campuran: keluarga dengan bukti terbanyak; seri → keluarga
+ * pabrikan bila termasuk, selain itu urutan FAMILY_PREFIX. Tanpa bukti sama
+ * sekali (ONU baru, belum dipetakan) → nama pabrikan / OUI.
  */
 export function detectFamily(known: Iterable<string>, manufacturer: string, oui: string): Family {
-  const paths = [...known];
-  const has = (re: RegExp): boolean => paths.some((p) => re.test(p));
-  if (has(/\.X_HW_VLAN$/)) return 'huawei';
-  if (has(/\.X_ZTE-COM_VLANID$/)) return 'zte';
-  if (has(/\.X_FH_(VLANID|ServiceList)$|\.X_FH_WANGponLinkConfig\./)) return 'fiberhome';
-  if (has(/\.X_CMCC_(VLANIDMark|ServiceList)$|\.X_CMCC_WANGponLinkConfig\./)) return 'cmcc';
-  if (has(/\.X_CU_(VLANIDMark|ServiceList)$|\.X_CU_WANGponLinkConfig\./)) return 'cu';
-  if (has(/\.X_CT-COM_(VLANIDMark|ServiceList)$|\.X_CT-COM_WANGponLinkConfig\./)) return 'ct';
+  const score = new Map<Family, number>();
+  for (const p of known) {
+    if (!/\.WANConnectionDevice\.\d+\./.test(p)) continue;
+    for (const [f, re] of FAMILY_PREFIX) if (re.test(p)) score.set(f, (score.get(f) ?? 0) + 1);
+  }
+  const byName = familyByName(manufacturer, oui);
+  const best = Math.max(0, ...score.values());
+  if (best > 0) {
+    const tied = FAMILY_PREFIX.map(([f]) => f).filter((f) => score.get(f) === best);
+    return tied.includes(byName) ? byName : tied[0]!;
+  }
+  return byName;
+}
+
+/** Keluarga dari nama pabrikan / OUI (dipakai bila belum ada bukti path). */
+function familyByName(manufacturer: string, oui: string): Family {
   const m = manufacturer.toLowerCase();
   if (/huawei/.test(m) || ['00E0FC', '4C1FCC', '00259E', '001882', 'E0247F'].includes(oui)) return 'huawei';
   if (/zte/.test(m) || ['001141', '00D0D0', 'D0608C', '344B50'].includes(oui)) return 'zte';

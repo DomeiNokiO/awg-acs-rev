@@ -12,6 +12,30 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0h. Sandi terbuka, sembunyikan SSID, firmware berbeda di model sama
+
+- **Sandi WiFi & PPPoE terbuka** di Ringkasan dan Konfigurasi (+ salin), dengan
+  asal nilai: *dari ONU* atau *via ACS*. Sandi yang disetel ACS dan diterima
+  ONU disimpan (`device_secret`) sebagai cadangan untuk firmware yang membaca
+  sandi sebagai string kosong; nilai ONU menang bila dibaca lebih baru.
+  Kredensial ManagementServer tidak ikut; reset pabrik menghapusnya.
+  Tombol **Ambil sandi dari ONU** (1 GPV path sandi saja).
+- **Sembunyikan SSID**: `{"type":"wifi","hidden":true}` →
+  `SSIDAdvertisementEnabled=false` (TR-098/TR-181) atau `X_*_SSIDHide` vendor;
+  WiFi tetap aktif. Kolom *Siaran SSID* di tabel WiFi.
+- Profil v6: leaf `Password`, `SSIDAdvertisementEnabled`, `X_*_SSIDHide`,
+  `PreSharedKey.1.PreSharedKey`. Upgrade dari v5 **tanpa GPN** — leaf baru
+  diambil dari struktur yang sudah dipetakan (hanya di objek milik ONU itu).
+- **Perbaikan:** keluarga vendor dari jumlah ekstensi di area WAN milik ONU
+  itu sendiri (F660 ORI `X_ZTE-COM_*` → ZTE, F660 suntikan CMCC → CMCC).
+  Bukti discovery dari unit lain bermodel sama dengan ekstensi vendor berbeda
+  tidak lagi ikut ditulis (sebelumnya: SPV VLAN unit CMCC memuat
+  `X_ZTE-COM_VLANID` → ditolak 9005).
+- Tes: 40 unit, 6 suite e2e (baru: `secrets.mjs`; `wan.mjs` + skenario satu
+  model dua firmware).
+
+---
+
 ## 0g. Data lapangan parameter ONU (19 ONU, 6 kombinasi)
 
 - `docs/PARAMETERS.md`: CPU/RAM, redaman, VLAN, ServiceList, ConnectionType,

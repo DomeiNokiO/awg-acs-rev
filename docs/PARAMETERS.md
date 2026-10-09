@@ -76,8 +76,8 @@ kosong/0 dilewati.
 | FiberHome HG6145D2 | `VLANID` (standar) | – | `X_FH_ServiceList` | – | `PPPoE_Routed` | **Lapangan** |
 | FiberHome HG6543C RP2872 | `VLANID` (standar) | – | `X_FH_ServiceList` | – | `IP_Routed` | **Lapangan** |
 | FiberHome (lainnya) | `X_FH_VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | – | – | Komunitas⁴ |
-| ZTE F660 firmware CMCC | `X_CMCC_VLANIDMark` | – | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` (bila ada) | `PPPoE_Routed` | **Lapangan** — diperlakukan sebagai keluarga CMCC |
-| ZTE | `X_ZTE-COM_VLANEnable` + `X_ZTE-COM_VLANID` | `X_ZTE-COM_WANPONLinkConfig.VLANID` | `X_ZTE-COM_ServiceList` | `X_ZTE-COM_LanInterface` | `IP_Routed` | Komunitas⁵ |
+| ZTE F660 firmware suntikan CMCC (V9.0.0P1T7) | `X_CMCC_VLANIDMark` | – | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` (bila ada) | `PPPoE_Routed` | **Lapangan** — diperlakukan sebagai keluarga CMCC |
+| ZTE (termasuk F660 ORI) | `X_ZTE-COM_VLANEnable` + `X_ZTE-COM_VLANID` | `X_ZTE-COM_WANPONLinkConfig.VLANID` | `X_ZTE-COM_ServiceList` | `X_ZTE-COM_LanInterface` | `IP_Routed` | Komunitas⁵ |
 | Huawei | `X_HW_VLAN` (+ `X_HW_PRI`) | – | `X_HW_SERVICELIST` | `X_HW_LANBIND.Lan{1-4}Enable`, `SSID{1-8}Enable` | `IP_Routed` | Komunitas³ ⁶ |
 | CMCC | `X_CMCC_VLANMode=2` + `X_CMCC_VLANIDMark` | `X_CMCC_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` | `IP_Routed` | Komunitas⁷ |
 | CT-COM | `X_CT-COM_VLANMode=2` + `X_CT-COM_VLANIDMark` | `X_CT-COM_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CT-COM_ServiceList` | `X_CT-COM_LanInterface` | `IP_Routed` | Komunitas (halny HL-4GMV) |
@@ -86,10 +86,22 @@ kosong/0 dilewati.
 di ONU itu sendiri (lihat HG6145D2 `PPPoE_Routed` vs HG6543C `IP_Routed` —
 satu merek, beda firmware), jadi tidak perlu disetel per model.
 
-Keluarga vendor ditentukan dari **bukti path dulu**, baru nama pabrikan
-(`vendorwan.ts → detectFamily`): ONU bermerek ZTE dengan parameter `X_CMCC_*`
-diperlakukan sebagai CMCC (VLAN, ServiceList, binding port, dan penulisan
-berurutan).
+Keluarga vendor **tidak** ditentukan dari merek, tetapi dari ekstensi yang
+dipakai ONU itu sendiri di area WAN (`vendorwan.ts → detectFamily`). Merek
+yang sama bisa membawa firmware berbeda:
+
+| ONU | Pabrikan dilaporkan | Ekstensi WAN | Keluarga |
+|-----|---------------------|--------------|----------|
+| ZTE F660 ORI | ZTE | `X_ZTE-COM_*` | ZTE |
+| ZTE F660 firmware suntikan China Mobile | ZTE | `X_CMCC_*` | CMCC (VLAN, ServiceList, binding, penulisan berurutan) |
+| Firmware campuran | – | beberapa | ekstensi terbanyak; seri → merek |
+| ONU baru (belum dipetakan) | – | – | nama pabrikan / OUI |
+
+Struktur hasil discovery dikumpulkan per ProductClass, jadi unit ORI dan unit
+CMCC bermodel sama berbagi data. Saat menyusun penulisan, path discovery
+dengan ekstensi vendor yang **tidak** dipakai ONU tersebut dibuang — tanpa ini
+unit CMCC ikut dikirimi `X_ZTE-COM_VLANID` milik unit ORI dan seluruh SPV
+ditolak (9005).
 
 PPP standar yang hanya ditulis bila ada: `TransportType=PPPoE`,
 `ConnectionTrigger=AlwaysOn`, `PPPAuthenticationProtocol=AUTO`.
@@ -119,6 +131,25 @@ Pasangan yang ditolak ONU dilewati otomatis ke pasangan berikutnya.
 
 Saat ganti sandi, ACS menulis ke **semua** lokasi di atas yang ada di ONU
 tersebut (sebagian firmware punya keduanya).
+
+**Sandi terbuka.** UI menampilkan sandi WiFi & PPPoE apa adanya. TR-098
+mengizinkan ONU mengembalikan string kosong saat sandi dibaca (Huawei
+umumnya begitu; ZTE/FiberHome umumnya mengirim nilai asli). Nilai kosong atau
+`****` bukan sandi; saat itu yang tampil adalah sandi terakhir yang **disetel
+lewat ACS** dan diterima ONU (label "via ACS"). PSK hex 64 karakter
+(`PreSharedKey.1.PreSharedKey`) bukan sandi ketikan dan tidak ditampilkan.
+PPPoE: `WANPPPConnection.{i}.Password` (TR-181 `PPP.Interface.{i}.Password`).
+
+### Sembunyikan SSID (siaran)
+
+| Parameter | Nilai "tersembunyi" | Bukti |
+|-----------|---------------------|-------|
+| `…WLANConfiguration.{i}.SSIDAdvertisementEnabled` | `false` | Standar TR-098 |
+| `Device.WiFi.AccessPoint.{i}.SSIDAdvertisementEnabled` | `false` | Standar TR-181 |
+| `…WLANConfiguration.{i}.X_<vendor>_SSIDHide` / `HideSSID` | `true` | Pola — dipakai hanya bila ONU tidak punya parameter standar |
+
+`Enable` (WiFi aktif) dan siaran SSID terpisah: WiFi bisa aktif tetapi
+tersembunyi.
 
 ---
 

@@ -86,3 +86,14 @@ test('detectFamily: bukti path menang atas nama pabrikan (data lapangan 2026-10)
   assert.equal(detectFamily([], 'CMCC', ''), 'cmcc');
   assert.equal(detectFamily([], 'VSOL', ''), 'ct');
 });
+
+test('detectFamily: F660 ORI vs F660 suntikan CMCC, firmware campuran → bukti terbanyak', () => {
+  // ZTE F660 ORI: ekstensi ZTE di area WAN.
+  assert.equal(detectFamily([`${conn}X_ZTE-COM_VLANID`, `${conn}X_ZTE-COM_ServiceList`], 'ZTE', '001141'), 'zte');
+  // Campuran: 1 leaf ZTE vs 2 leaf CMCC → CMCC.
+  assert.equal(detectFamily([`${conn}X_ZTE-COM_LanInterface`, `${conn}X_CMCC_VLANIDMark`, `${conn}X_CMCC_ServiceList`], 'ZTE', '001141'), 'cmcc');
+  // Seri → keluarga pabrikan.
+  assert.equal(detectFamily([`${conn}X_ZTE-COM_VLANID`, `${conn}X_CMCC_ServiceList`], 'ZTE', '001141'), 'zte');
+  // Ekstensi di luar area WAN (mis. optik X_CMCC_GponInterfaceConfig) tidak menentukan keluarga WAN.
+  assert.equal(detectFamily(['InternetGatewayDevice.WANDevice.1.X_CMCC_GponInterfaceConfig.RXPower'], 'ZTE', '001141'), 'zte');
+});

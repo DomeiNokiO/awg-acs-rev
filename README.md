@@ -407,6 +407,7 @@ Ubah/Hapus) dan semua SSID (tombol Ubah). Tab **Konfigurasi**:
 | Konfigurasi | Body `POST /api/devices/:id/config` | RPC |
 |-------------|-------------------------------------|-----|
 | SSID & sandi WiFi | `{"type":"wifi","wlanIndex":1,"ssid":"…","passphrase":"…"}` | `SetParameterValues` |
+| WiFi aktif / sembunyikan SSID | `{"type":"wifi","wlanIndex":1,"wifiEnable":true,"hidden":true}` | SPV `Enable` + `SSIDAdvertisementEnabled=false` (atau `X_*_SSIDHide` vendor) |
 | Kredensial PPPoE | `{"type":"pppoe","target":"<path koneksi>","username":"…","password":"…","vlanId":100}` | `SetParameterValues` (kredensial & VLAN terpisah) |
 | VLAN | `{"type":"vlan","target":"<path koneksi>","vlanId":200}` | `SetParameterValues` |
 | WAN PPPoE — WCD baru | `{"type":"wan-add","placement":"new","username":"…","password":"…","vlanId":100}` | `AddObject` WCD → `AddObject` WANPPPConnection → SPV standar → SPV vendor → `Enable` |
@@ -417,6 +418,13 @@ Ubah/Hapus) dan semua SSID (tombol Ubah). Tab **Konfigurasi**:
 | Hapus / aktif-nonaktif WAN | `{"type":"wan-delete","target":…}` / `{"type":"wan-enable","target":…,"enable":false}` | `DeleteObject` / SPV `Enable` |
 | Interval Inform | `{"type":"inform-interval","informInterval":600}` | SPV `ManagementServer.PeriodicInformInterval` |
 | Reboot / reset pabrik | `POST /reboot` / `POST /factory-reset {"confirm":"<serial>"}` (admin) | `Reboot` / `FactoryReset` |
+
+**Sandi terbuka.** Tabel WAN dan WiFi di Ringkasan menampilkan sandi PPPoE dan
+WiFi **tanpa disamarkan** (+ tombol salin) beserta asalnya: *dari ONU*, atau
+*via ACS* — banyak firmware (mis. Huawei) mengembalikan string kosong saat
+sandi dibaca, jadi ACS menyimpan sandi terakhir yang ia setel dan diterima ONU
+sebagai cadangan tampilan. Tombol **Ambil sandi dari ONU** membaca ulang hanya
+path sandi (1 GPV). Kolom *Siaran SSID* menunjukkan SSID tampil/tersembunyi.
 
 Referensi seluruh parameter per vendor (redaman, CPU/RAM, WAN, WiFi, counter
 trafik) beserta status buktinya: **[docs/PARAMETERS.md](docs/PARAMETERS.md)**.
@@ -452,6 +460,11 @@ Dibangun dari awal, bukan ditempel belakangan:
   traversal diblokir (diuji: `403`), rute tak dikenal membalikkan `404.html`
   sungguhan, bukan halaman utama diam-diam.
 - **Log tidak memuat body SOAP** — berisi kredensial PPPoE pelanggan.
+- **Sandi pelanggan (WiFi/PPPoE) tampil terbuka** untuk semua pengguna yang
+  login (admin & operator) — sengaja, untuk layanan pelanggan. Nilainya
+  tersimpan di database ACS (`params`, `device_secret`); lindungi file
+  `data/acs.db` dan akun operator. Kredensial Connection Request/CWMP tetap
+  disamarkan.
 
 ## Menambah / Push Parameter
 

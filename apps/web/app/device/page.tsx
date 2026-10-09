@@ -147,6 +147,35 @@ function DeviceBody() {
     }
   };
 
+  /**
+   * Baca ulang sandi WiFi & PPPoE langsung dari ONU (1 GPV berisi path sandi
+   * saja), lalu panggil ONU agar segera Inform.
+   */
+  const readSecrets = async () => {
+    if (!id || !detail) return;
+    const ins = detail.insight;
+    const paths = [...new Set([
+      ...ins.wan.filter((c) => c.kind === 'ppp').map((c) => c.passwordPath ?? `${c.base}Password`),
+      ...ins.wlan.flatMap((w) => w.passphrasePaths),
+    ])];
+    if (!paths.length) { flash('Belum ada path sandi yang dikenal — tekan Pelajari struktur dulu.', 'warn'); return; }
+    setConnectBusy(true);
+    try {
+      await api(`/api/devices/${encodeURIComponent(id)}/read`, { method: 'POST', body: { paths } });
+      try {
+        await api(`/api/devices/${encodeURIComponent(id)}/connect`, { method: 'POST' });
+        flash(`${paths.length} path sandi dibaca dari ONU — diperbarui dalam beberapa detik.`);
+        setTimeout(() => void load(), 6000);
+      } catch (e) {
+        flash(`Pembacaan sandi diantrekan; dibaca saat Inform berikutnya. ${(e as Error).message}`, 'warn');
+      }
+    } catch (e) {
+      flash(`Gagal membaca sandi: ${(e as Error).message}`, 'err');
+    } finally {
+      setConnectBusy(false);
+    }
+  };
+
   const rediscover = async () => {
     if (!id) return;
     try {
@@ -379,7 +408,8 @@ function DeviceBody() {
 
             <div className="card-body border-top">
               {tab === 'summary' && (
-                <SummaryPanel device={detail.device} insight={detail.insight} onEdit={openConfig} onDeleteWan={deleteWan} onToggleWan={toggleWan} />
+                <SummaryPanel device={detail.device} insight={detail.insight} onEdit={openConfig} onDeleteWan={deleteWan} onToggleWan={toggleWan}
+                  onReadSecrets={readSecrets} busy={connectBusy} />
               )}
 
               {tab === 'config' && (
@@ -645,12 +675,48 @@ function Usage({ pct }: { pct: number | null }) {
   );
 }
 
-function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan }: {
+/**
+ * Sandi WiFi/PPPoE terbuka + tombol salin. Asal nilai ditampilkan karena
+ * banyak firmware tidak mengirim sandi saat dibaca (TR-069 mengizinkan
+ * string kosong) — saat itu yang tampil adalah nilai terakhir yang disetel
+ * lewat ACS.
+ */
+function Secret({ value, source, at }: { value: string | null; source: 'onu' | 'acs' | null; at: number | null }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) {
+    return (
+      <span className="small text-muted" title="ONU tidak mengirim sandi saat dibaca (disembunyikan firmware) dan sandi belum pernah disetel lewat ACS. Setel sandi lewat tombol edit agar tersimpan di ACS.">
+        <i className="fa-solid fa-eye-slash me-1" />tidak dikirim ONU
+      </span>
+    );
+  }
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* izin clipboard ditolak */ }
+  };
+  return (
+    <span className="secret text-nowrap">
+      <code className="user-select-all">{value}</code>
+      <button type="button" className="btn btn-link btn-sm p-0 ms-1 align-baseline" title="Salin" onClick={() => void copy()}>
+        <i className={`fa-solid ${copied ? 'fa-check text-success' : 'fa-copy'}`} />
+      </button>
+      <span className="d-block small text-muted"
+        title={source === 'acs' ? 'ONU tidak mengirim sandi terbaru; ini nilai terakhir yang disetel lewat ACS' : 'Dibaca langsung dari ONU'}>
+        {source === 'acs'
+          ? <>via ACS{at ? ` · ${new Date(at).toLocaleDateString('id-ID')}` : ''}</>
+          : 'dari ONU'}
+      </span>
+    </span>
+  );
+}
+
+function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan, onReadSecrets, busy }: {
   device: DeviceRow;
   insight: DeviceInsight;
   onEdit: (p: Omit<ConfigPreset, 'nonce'>) => void;
   onDeleteWan: (base: string, label: string) => void;
   onToggleWan: (base: string, enable: boolean, label: string) => void;
+  onReadSecrets: () => void;
+  busy: boolean;
 }) {
   const o = insight.optical;
   const lvl = rxLevel(o.rx, o.los);
@@ -690,7 +756,11 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan }: {
         <h4 className="small text-uppercase text-muted fw-semibold mb-0">
           <i className="fa-solid fa-network-wired me-2" />Koneksi WAN ({insight.wan.length})
         </h4>
-        <button className="btn btn-sm btn-outline-primary ms-auto" onClick={() => onEdit({ mode: 'wan-add' })}>
+        <button className="btn btn-sm btn-outline-secondary ms-auto me-2" disabled={busy} onClick={onReadSecrets}
+          title="Baca ulang sandi PPPoE & WiFi langsung dari ONU">
+          <i className="fa-solid fa-key me-1" />Ambil sandi dari ONU
+        </button>
+        <button className="btn btn-sm btn-outline-primary" onClick={() => onEdit({ mode: 'wan-add' })}>
           <i className="fa-solid fa-plus me-1" />WAN Internet
         </button>
       </div>
@@ -698,7 +768,7 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan }: {
         <table className="table table-sm table-hover align-middle mb-0">
           <thead>
             <tr>
-              <th>Koneksi</th><th>Username</th><th>Status</th><th>IP</th><th>VLAN / Service</th>
+              <th>Koneksi</th><th>Username / Sandi</th><th>Status</th><th>IP</th><th>VLAN / Service</th>
             </tr>
           </thead>
           <tbody>
@@ -742,7 +812,12 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan }: {
                       </button>
                     </div>
                   </td>
-                  <td className="small font-monospace">{c.username || '—'}</td>
+                  <td className="small">
+                    <div className="font-monospace">{c.username || '—'}</div>
+                    {c.kind === 'ppp' && (c.username || c.password) && (
+                      <Secret value={c.password} source={c.passwordSource} at={c.passwordAt} />
+                    )}
+                  </td>
                   <td>
                     {statusBadge(c.status)}
                     {(() => {
@@ -768,25 +843,29 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan }: {
       <div className="table-responsive mb-3">
         <table className="table table-sm table-hover align-middle mb-0">
           <thead>
-            <tr><th>#</th><th>Band</th><th>SSID</th><th>Aktif</th><th>Keamanan</th><th>Kanal</th><th>Klien</th><th style={{ width: 60 }}></th></tr>
+            <tr><th>#</th><th>Band</th><th>SSID</th><th>Sandi</th><th>Aktif</th><th>Siaran SSID</th><th>Keamanan</th><th>Kanal</th><th>Klien</th><th style={{ width: 60 }}></th></tr>
           </thead>
           <tbody>
             {insight.wlan.length === 0 && (
-              <tr><td colSpan={8} className="text-center text-muted py-3">Belum ada data WiFi.</td></tr>
+              <tr><td colSpan={10} className="text-center text-muted py-3">Belum ada data WiFi.</td></tr>
             )}
             {insight.wlan.map((w) => (
               <tr key={w.base}>
                 <td className="num">{w.index}</td>
                 <td className="small">{w.band ?? '—'}</td>
                 <td className="fw-semibold">{w.ssid || '—'}</td>
+                <td><Secret value={w.passphrase} source={w.passphraseSource} at={w.passphraseAt} /></td>
                 <td>{w.enable === null ? '—' : /^(1|true)$/i.test(w.enable)
                   ? <span className="badge text-bg-success">ya</span>
                   : <span className="badge text-bg-secondary">tidak</span>}</td>
+                <td>{w.hidden === null ? <span className="text-muted">—</span> : w.hidden
+                  ? <span className="badge text-bg-warning"><i className="fa-solid fa-eye-slash me-1" />tersembunyi</span>
+                  : <span className="badge text-bg-light border"><i className="fa-solid fa-eye me-1" />tampil</span>}</td>
                 <td className="small">{w.security ?? '—'}</td>
                 <td className="small num">{w.channel ?? '—'}</td>
                 <td className="small num">{w.clients ?? '—'}</td>
                 <td className="text-end">
-                  <button className="btn btn-sm btn-outline-secondary" title="Ganti SSID / sandi"
+                  <button className="btn btn-sm btn-outline-secondary" title="Ganti SSID / sandi / sembunyikan SSID"
                     onClick={() => onEdit({ mode: 'wifi', wlanIndex: w.index })}>
                     <i className="fa-solid fa-pen" />
                   </button>

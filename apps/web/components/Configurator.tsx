@@ -64,6 +64,8 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
   const [ssid, setSsid] = useState('');
   const [pass, setPass] = useState('');
   const [wifiEnable, setWifiEnable] = useState<'' | 'on' | 'off'>('');
+  // Siaran SSID: '' = tidak diubah. WiFi tetap aktif saat disembunyikan.
+  const [wifiHide, setWifiHide] = useState<'' | 'show' | 'hide'>('');
   // pppoe / vlan
   const [target, setTarget] = useState('');
   const [user, setUser] = useState('');
@@ -190,6 +192,7 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
       if (ssid && ssid !== cur) body.ssid = ssid;
       if (pass) body.passphrase = pass;
       if (wifiEnable) body.wifiEnable = wifiEnable === 'on';
+      if (wifiHide) body.hidden = wifiHide === 'hide';
     } else if (mode === 'pppoe') {
       body.target = target;
       if (user && user !== conn?.username) body.username = user;
@@ -331,6 +334,13 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
                   <label className="form-label small mb-1">Sandi WiFi baru</label>
                   <input className={inputCls} type="text" value={pass} maxLength={63} autoComplete="off"
                     onChange={(e) => setPass(e.target.value)} placeholder="min. 8 karakter, kosong = tetap" />
+                  {(() => {
+                    const cw = insight.wlan.find((x) => x.index === wlanIndex);
+                    return cw?.passphrase
+                      ? <div className="small text-muted mt-1">Saat ini: <code className="user-select-all">{cw.passphrase}</code>
+                        {cw.passphraseSource === 'acs' ? ' (disetel via ACS)' : ''}</div>
+                      : <div className="small text-muted mt-1">Sandi saat ini tidak dikirim ONU.</div>;
+                  })()}
                 </div>
                 <div className="col-md-4">
                   <label className="form-label small mb-1">Status SSID</label>
@@ -340,6 +350,21 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
                     <option value="on">Aktifkan</option>
                     <option value="off">Nonaktifkan</option>
                   </select>
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small mb-1">Siaran SSID</label>
+                  <select className={selectCls} value={wifiHide}
+                    onChange={(e) => setWifiHide(e.target.value as '' | 'show' | 'hide')}>
+                    <option value="">Tidak diubah</option>
+                    <option value="show">Tampilkan SSID</option>
+                    <option value="hide">Sembunyikan SSID (hidden)</option>
+                  </select>
+                  <div className="small text-muted mt-1">
+                    {(() => {
+                      const h = insight.wlan.find((x) => x.index === wlanIndex)?.hidden;
+                      return h === null || h === undefined ? 'Status siaran belum terbaca.' : `Saat ini: ${h ? 'tersembunyi' : 'tampil'}.`;
+                    })()} WiFi tetap aktif; perangkat harus mengetik nama SSID secara manual.
+                  </div>
                 </div>
               </div>
             )}
@@ -372,6 +397,11 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
                       <label className="form-label small mb-1">Password PPPoE baru</label>
                       <input className={inputCls} value={pppPass} maxLength={128} autoComplete="off"
                         onChange={(e) => setPppPass(e.target.value)} placeholder="kosong = tetap" />
+                      <div className="small text-muted mt-1">
+                        {conn?.password
+                          ? <>Saat ini: <code className="user-select-all">{conn.password}</code>{conn.passwordSource === 'acs' ? ' (disetel via ACS)' : ''}</>
+                          : 'Sandi saat ini tidak dikirim ONU.'}
+                      </div>
                     </div>
                   </>
                 )}

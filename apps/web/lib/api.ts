@@ -183,6 +183,11 @@ export interface WanConn {
   uptime: string | null;
   lastError: string | null;
   nat: string | null;
+  /** Sandi PPPoE terbuka; null = ONU tidak mengirimnya & belum pernah disetel ACS. */
+  password: string | null;
+  passwordPath: string | null;
+  passwordSource: 'onu' | 'acs' | null;
+  passwordAt: number | null;
 }
 
 export interface WlanInfo {
@@ -197,6 +202,14 @@ export interface WlanInfo {
   clients: string | null;
   passphrasePaths: string[];
   hasPassphrase: boolean;
+  /** Sandi WiFi terbuka; null = ONU tidak mengirimnya & belum pernah disetel ACS. */
+  passphrase: string | null;
+  passphraseSource: 'onu' | 'acs' | null;
+  passphraseAt: number | null;
+  /** SSID disembunyikan (siaran mati); null = ONU tidak melaporkan. */
+  hidden: boolean | null;
+  hiddenPath: string | null;
+  apBase: string | null;
 }
 
 export interface WcdInfo {

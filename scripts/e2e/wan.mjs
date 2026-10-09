@@ -64,4 +64,17 @@ await acs.call('POST', `/api/devices/${idOf(hw)}/config`, { type: 'wifi', ssid: 
 hw.log = [];
 await inform(hw, acs.cwmp, '6 CONNECTION REQUEST');
 t.check(hw.log[0] === 'SetParameterValues', 'tulisan didahulukan dari bacaan');
+
+// Satu model, dua firmware: ZTE ORI (X_ZTE-COM_*) dan ZTE berfirmware CMCC
+// (X_CMCC_*) dengan ProductClass sama. Bukti discovery unit ORI tidak boleh
+// ikut ditulis ke unit CMCC (SPV atomik → 9005).
+const zcm = makeDevice('cmcc', 'F660CMCC', { strictEnd: true, identity: [zte.oui, zte.pc, 'ZTE'] });
+await settle(zcm, acs.cwmp);
+det = await acs.get(`/api/devices/${idOf(zcm)}`);
+const zc = det.insight.wan.find((c) => c.kind === 'ppp' && c.username);
+r = await acs.call('POST', `/api/devices/${idOf(zcm)}/config`, { type: 'vlan', target: zc.base, vlanId: 600 });
+t.check(r.status === 200 && !r.body.plan.join(' ').includes('ZTE-COM'), `ZTE firmware CMCC: rencana tanpa X_ZTE-COM (${r.body.plan.join('; ')})`);
+await settle(zcm, acs.cwmp, '6 CONNECTION REQUEST');
+const zcLink = `${W}${zc.wcd}.X_CMCC_WANGponLinkConfig.VLANIDMark`;
+t.check(zcm.V.get(zcLink) === '600' && !zcm.errors.length, `ZTE firmware CMCC: VLAN 600 di X_CMCC_WANGponLinkConfig, tanpa fault`);
 t.done(acs);

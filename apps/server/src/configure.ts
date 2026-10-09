@@ -68,6 +68,8 @@ export interface ConfigRequest {
   ssid?: string;
   passphrase?: string;
   wifiEnable?: boolean;
+  /** true = sembunyikan SSID (siaran mati), false = tampilkan. WiFi tetap aktif. */
+  hidden?: boolean;
   // pppoe / vlan / wan-delete: path objek koneksi (dari insight.wan[].base)
   target?: string;
   username?: string;
@@ -132,7 +134,9 @@ const NAME_RE = /^[\w.\-:]{1,256}$/;
 
 interface Knowledge {
   model: DataModel | null;
-  /** Path yang terbukti ada: params ∪ discovered_params (model ini). */
+  /** Path yang dilaporkan ONU ini sendiri (tabel params). */
+  own: Set<string>;
+  /** Path yang terbukti ada: params ∪ discovered_params (model ini, ekstensi vendor yang sama). */
   known: Set<string>;
   /** path → tipe xsd yang dilaporkan perangkat. */
   types: Map<string, string>;
@@ -146,13 +150,23 @@ interface Knowledge {
 function knowledge(ctx: CwmpContext, db: Database, deviceId: string): Knowledge {
   const row = db.getDevice(deviceId);
   const params = db.getParams(deviceId);
-  const known = new Set(params.map((p) => p.path));
+  const own = new Set(params.map((p) => p.path));
+  const known = new Set(own);
+  // Struktur hasil discovery dikumpulkan per ProductClass — padahal satu
+  // model bisa membawa firmware berbeda (mis. F660 ORI `X_ZTE-COM_*` vs
+  // F660 suntikan CMCC `X_CMCC_*`). Path discovery dengan ekstensi vendor
+  // yang TIDAK dipakai ONU ini dibuang, supaya bukti firmware lain tidak
+  // ikut ditulis (SPV atomik → seluruh batch ditolak 9005).
+  const ownTokens = vendorTokens(own);
   for (const d of db.getDiscovered(row?.product_class ?? '')) {
-    if (!d.path.endsWith('.')) known.add(d.path);
+    if (d.path.endsWith('.')) continue;
+    if (ownTokens.size && [...vendorTokens([d.path])].some((t) => !ownTokens.has(t))) continue;
+    known.add(d.path);
   }
   const model = deviceModel(ctx, deviceId);
   return {
     model,
+    own,
     known,
     types: new Map(params.filter((p) => p.type && p.type !== 'xsd:string').map((p) => [p.path, p.type])),
     values: new Map(params.map((p) => [p.path, p.value])),
@@ -185,7 +199,17 @@ function existsLike(k: Knowledge, path: string): boolean {
 
 /** Keluarga vendor: dari bukti path dulu, lalu nama pabrikan/OUI (vendorwan.ts). */
 function familyOf(k: Knowledge): Family {
-  return detectFamily(k.known, k.manufacturer, k.oui);
+  // Bukti milik ONU ini dulu; data discovery model hanya bila ONU belum
+  // melaporkan ekstensi WAN apa pun.
+  const ownWan = [...k.own].some((p) => /\.WANConnectionDevice\.\d+\..*\.X_/.test(p));
+  return detectFamily(ownWan ? k.own : k.known, k.manufacturer, k.oui);
+}
+
+/** Token ekstensi vendor (`X_<token>_…`) yang muncul di path. */
+function vendorTokens(paths: Iterable<string>): Set<string> {
+  const out = new Set<string>();
+  for (const p of paths) for (const m of p.matchAll(/\.X_([A-Za-z0-9-]+?)_/g)) out.add(m[1]!);
+  return out;
 }
 
 /* ------------------------------------------------------------------ *
@@ -309,6 +333,21 @@ function applyWifi(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledg
   }
   if (typeof req.wifiEnable === 'boolean') {
     std.push({ name: `${base}Enable`, type: 'xsd:boolean', value: req.wifiEnable ? 'true' : 'false' });
+  }
+  if (typeof req.hidden === 'boolean') {
+    // Standar: SSIDAdvertisementEnabled (TR-098 di WLANConfiguration, TR-181
+    // di AccessPoint) — kebalikan dari "hidden". Vendor X_*_SSIDHide (bila
+    // hanya itu yang dilaporkan ONU) bernilai true = tersembunyi. Ditulis
+    // setelah Enable di SPV yang sama → WiFi bisa aktif tapi tersembunyi.
+    const stdPath = is181 ? (w?.apBase ? `${w.apBase}SSIDAdvertisementEnabled` : null) : `${base}SSIDAdvertisementEnabled`;
+    const hp = w?.hiddenPath ?? stdPath;
+    if (!hp) {
+      rep.skipped.push('AccessPoint untuk SSID ini belum diketahui — jalankan "Pelajari struktur" dulu');
+    } else {
+      const v = /SSIDAdvertisementEnabled$/.test(hp) ? !req.hidden : req.hidden;
+      if (!w?.hiddenPath && !existsLike(k, hp)) rep.guessed.push(hp);
+      std.push({ name: hp, type: typeFor(k, hp, 'xsd:boolean'), value: v ? 'true' : 'false' });
+    }
   }
   if (req.passphrase !== undefined && req.passphrase !== '') {
     const pw = str(req.passphrase, 63);

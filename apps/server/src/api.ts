@@ -27,7 +27,7 @@ import { loadCatalog, catalogWritePath, writeCatalogFile, CATALOG_FILE } from '.
 import { validateCatalog } from './catalog-schema.ts';
 import { validatePreset, applyPresets, type PresetCondition, type PresetAction } from './presets.ts';
 import { applyConfig, CONFIG_TYPES, type ConfigRequest } from './configure.ts';
-import { buildInsight, trafficCounters } from './insight.ts';
+import { buildInsight, applySecrets, trafficCounters } from './insight.ts';
 import { sendConnectionRequest, crCooldown, markCr } from './connreq.ts';
 import { WebhookDispatcher, type DeliveryLogEntry } from './webhooks.ts';
 import type { WebhookRow } from '@acs/core';
@@ -222,8 +222,15 @@ export function registerApiRoutes(
     const d = db.getDevice(id);
     if (!d) return reply.code(404).send({ error: 'device_not_found' });
     const params = db.getParams(id);
+    // Sandi WiFi/PPPoE ditampilkan terbuka untuk operator yang login (sama
+    // seperti nilai parameter mentah); bila ONU tidak mengirimnya, dipakai
+    // nilai terakhir yang disetel lewat ACS.
+    const insight = applySecrets(
+      buildInsight(params, d.data_model === 'TR-181' || d.data_model === 'TR-098' ? d.data_model : null),
+      db.getSecrets(id),
+    );
     return reply.send({
-      insight: buildInsight(params, d.data_model === 'TR-181' || d.data_model === 'TR-098' ? d.data_model : null),
+      insight,
       device: {
         ...maskDevice(d),
         online: !!d.last_inform_at && Date.now() - d.last_inform_at < 30 * 60 * 1000,

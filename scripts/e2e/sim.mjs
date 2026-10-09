@@ -10,7 +10,9 @@
  *    (freshConn), menolak GPN NextLevel=false (rejectDeep), namespace
  *    cwmp-1-2 yang wajib dicocokkan (ns, strictNs), memutus sesi bila ACS
  *    mengirim amplop SOAP kosong alih-alih HTTP 204 (strictEnd), slot WAN
- *    kosong buatan OLT (emptySlot), tanpa data CPU/RAM (sys: false).
+ *    kosong buatan OLT (emptySlot), tanpa data CPU/RAM (sys: false),
+ *    sandi PPPoE/WiFi awal (pppPass, wifiPass), sandi selalu dibaca kosong
+ *    (hideSecrets).
  */
 import http from 'node:http';
 
@@ -21,12 +23,15 @@ export function makeDevice(vendor, serial, opts = {}) {
   const put = (k, v) => V.set(k, String(v));
   const P = 'InternetGatewayDevice.';
   const W = `${P}WANDevice.1.`;
-  const [oui, pc, man] = {
+  let [oui, pc, man] = {
     zte: ['001141', 'F670L', 'ZTE'],
     huawei: ['00E0FC', 'HG8245H5', 'Huawei Technologies Co., Ltd'],
     fiberhome: ['0019E0', 'HG6543C', 'FiberHome'],
     cmcc: ['A0F3E4', 'GM220-S', 'CMCC'],
   }[vendor];
+  // identity: [oui, productClass, manufacturer] — firmware vendor X di hardware
+  // merek lain (mis. firmware CMCC di ZTE F660).
+  if (opts.identity) [oui, pc, man] = opts.identity;
   put(`${P}DeviceInfo.Manufacturer`, man);
   put(`${P}DeviceInfo.ModelName`, pc);
   put(`${P}DeviceInfo.SerialNumber`, serial);
@@ -43,12 +48,14 @@ export function makeDevice(vendor, serial, opts = {}) {
   put(`${ppp}Name`, '2_INTERNET_R_VID_100');
   put(`${ppp}Enable`, 'true');
   put(`${ppp}Username`, `${vendor}user@isp`);
-  put(`${ppp}Password`, '');
+  put(`${ppp}Password`, opts.pppPass ?? '');
   put(`${ppp}ConnectionStatus`, 'Connected');
   put(`${ppp}ExternalIPAddress`, '100.64.1.23');
   put(`${P}LANDevice.1.WLANConfiguration.1.SSID`, `${vendor}-2G`);
   put(`${P}LANDevice.1.WLANConfiguration.1.BeaconType`, '11i');
-  put(`${P}LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase`, '');
+  put(`${P}LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase`, opts.wifiPass ?? '');
+  put(`${P}LANDevice.1.WLANConfiguration.1.Enable`, 'true');
+  put(`${P}LANDevice.1.WLANConfiguration.1.SSIDAdvertisementEnabled`, 'true');
   if (vendor === 'zte') {
     put(`${ppp}X_ZTE-COM_VLANID`, '100');
     put(`${ppp}X_ZTE-COM_VLANEnable`, 'true');
@@ -156,10 +163,12 @@ function respond(dev, xml) {
     for (const p of [...xml.matchAll(/<string>([^<]*)<\/string>/g)].map((x) => unesc(x[1]))) {
       if (p.endsWith('.')) {
         if (!dev.objects.has(p)) return fault(dev, 9005, 'Invalid parameter name');
-        for (const [k, v] of dev.V) if (k.startsWith(p)) out.push([k, v]);
+        for (const [k, v] of dev.V) if (k.startsWith(p)) out.push([k, dev.opts.hideSecrets && /(Password|KeyPassphrase)$/.test(k) ? '' : v]);
       } else {
         if (!dev.V.has(p)) return fault(dev, 9005, 'Invalid parameter name');
-        out.push([p, dev.counters.has(p) ? dev.counterValue(p) : dev.V.get(p)]);
+        // hideSecrets: firmware yang mengembalikan string kosong saat sandi dibaca (TR-098).
+        const secret = dev.opts.hideSecrets && /(Password|KeyPassphrase)$/.test(p);
+        out.push([p, secret ? '' : dev.counters.has(p) ? dev.counterValue(p) : dev.V.get(p)]);
       }
     }
     return env(dev, `<cwmp:GetParameterValuesResponse><ParameterList soap-enc:arrayType="cwmp:ParameterValueStruct[${out.length}]">${out.map(([k, v]) => `<ParameterValueStruct><Name>${esc(k)}</Name><Value xsi:type="xsd:string">${esc(v)}</Value></ParameterValueStruct>`).join('')}</ParameterList></cwmp:GetParameterValuesResponse>`);

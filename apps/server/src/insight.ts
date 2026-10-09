@@ -17,7 +17,20 @@
 
 export type DataModel = 'TR-098' | 'TR-181';
 
-export interface ParamLike { path: string; value: string; type?: string }
+export interface ParamLike { path: string; value: string; type?: string; updated_at?: number }
+
+/** Asal sandi yang ditampilkan: dibaca dari ONU, atau nilai terakhir yang ditulis ACS. */
+export type SecretSource = 'onu' | 'acs';
+
+/**
+ * Nilai sandi yang bisa ditampilkan. Firmware yang menyembunyikan sandi
+ * mengirim string kosong atau tanda bintang — itu bukan sandi.
+ */
+export function revealSecret(v: string | null | undefined): string | null {
+  if (!v) return null;
+  if (/^[*•]+$/.test(v)) return null;
+  return v;
+}
 
 const IGD = 'InternetGatewayDevice.';
 
@@ -198,6 +211,14 @@ export interface WanConn {
   uptime: string | null;
   lastError: string | null;
   nat: string | null;
+  /** Sandi PPPoE (null = ONU tidak mengirimnya dan ACS belum pernah menyetelnya). */
+  password: string | null;
+  passwordPath: string | null;
+  passwordSource: SecretSource | null;
+  /** Waktu ACS menyetel sandi (hanya bila passwordSource = 'acs'). */
+  passwordAt: number | null;
+  /** Waktu nilai sandi dibaca dari ONU (internal, untuk membandingkan dengan ACS). */
+  _passwordReadAt?: number;
 }
 
 const WAN98 = /^(InternetGatewayDevice\.WANDevice\.(\d+)\.WANConnectionDevice\.(\d+)\.(WANPPPConnection|WANIPConnection)\.(\d+)\.)([^.]+)$/;
@@ -213,11 +234,19 @@ function emptyConn(base: string, kind: 'ppp' | 'ip', wcd: number | null, instanc
     gateway: null, dns: null, connectionType: null, addressingType: null,
     vlan: null, vlanPath: null, serviceList: null, serviceListPath: null,
     mac: null, uptime: null, lastError: null, nat: null,
+    password: null, passwordPath: null, passwordSource: null, passwordAt: null,
   };
 }
 
-function fillCommon(c: WanConn, leaf: string, value: string, path: string): void {
+function fillCommon(c: WanConn, leaf: string, value: string, path: string, at?: number): void {
   switch (leaf) {
+    case 'Password': {
+      c.passwordPath = path;
+      c.password = revealSecret(value);
+      c.passwordSource = c.password ? 'onu' : null;
+      if (at !== undefined) c._passwordReadAt = at;
+      break;
+    }
     case 'Name': case 'Alias': c.name ??= value; break;
     case 'Enable': c.enable = value; break;
     case 'ConnectionStatus': c.status = value; break;
@@ -252,7 +281,7 @@ function wan098(params: ParamLike[]): WanConn[] {
         c = emptyConn(base, m[4] === 'WANPPPConnection' ? 'ppp' : 'ip', Number(m[3]), Number(m[5]));
         map.set(base, c);
       }
-      fillCommon(c, m[6]!, p.value, p.path);
+      fillCommon(c, m[6]!, p.value, p.path, p.updated_at);
       continue;
     }
     const l = LINK98.exec(p.path);
@@ -279,7 +308,7 @@ function wan181(params: ParamLike[]): WanConn[] {
     if (!m) continue;
     let c = conns.get(m[1]!);
     if (!c) { c = emptyConn(m[1]!, 'ppp', null, Number(m[2])); conns.set(m[1]!, c); }
-    fillCommon(c, m[3]!, p.value, p.path);
+    fillCommon(c, m[3]!, p.value, p.path, p.updated_at);
   }
   for (const c of conns.values()) {
     const ref = c.base.slice(0, -1); // Device.PPP.Interface.N
@@ -333,6 +362,37 @@ export interface WlanInfo {
   /** Path sandi yang terbaca di perangkat (urutan prioritas tulis). */
   passphrasePaths: string[];
   hasPassphrase: boolean;
+  /** Sandi WiFi terbuka (null = tidak dikirim ONU dan belum pernah disetel ACS). */
+  passphrase: string | null;
+  passphraseSource: SecretSource | null;
+  passphraseAt: number | null;
+  /** SSID disembunyikan (siaran SSID mati); null = ONU tidak melaporkan. */
+  hidden: boolean | null;
+  /** Parameter siaran SSID: `SSIDAdvertisementEnabled` (standar) atau `X_*_SSIDHide` vendor. */
+  hiddenPath: string | null;
+  /** TR-181: objek AccessPoint milik SSID ini (tempat Security & siaran SSID). */
+  apBase: string | null;
+  /** Waktu sandi dibaca dari ONU (internal). */
+  _passphraseReadAt?: number;
+}
+
+/** Leaf sandi WiFi TR-098, urut prioritas tampilan (passphrase dulu, PSK hex terakhir). */
+const WLAN_PASS_LEAF = /^(PreSharedKey\.1\.KeyPassphrase|KeyPassphrase|X_[^.]+_KeyPassphrase|X_[^.]+_WPAKey|PreSharedKey\.1\.PreSharedKey)$/;
+/** Leaf vendor "sembunyikan SSID" (true = tersembunyi), dipakai bila standar tidak ada. */
+const WLAN_HIDE_LEAF = /^X_[A-Za-z0-9-]+_(?:SSIDHide|HideSSID|SSIDHidden|HiddenSSID)$/;
+
+const isTrue = (v: string | null | undefined): boolean | null =>
+  v === undefined || v === null || v === '' ? null : /^(1|true)$/i.test(v);
+
+/** Pilih sandi yang bisa ditampilkan dari kandidat leaf (urut prioritas). */
+function pickPassphrase(cands: ParamLike[]): ParamLike | null {
+  const order = (p: ParamLike) => {
+    const leaf = /\.(PreSharedKey\.1\.KeyPassphrase|PreSharedKey\.1\.PreSharedKey|[^.]+)$/.exec(p.path)?.[1] ?? '';
+    return leaf === 'PreSharedKey.1.PreSharedKey' ? 1 : 0;
+  };
+  // PSK hex 64 karakter adalah kunci turunan, bukan sandi yang diketik pengguna.
+  return [...cands].sort((a, b) => order(a) - order(b))
+    .find((p) => revealSecret(p.value) && !(/PreSharedKey\.1\.PreSharedKey$/.test(p.path) && /^[0-9a-f]{64}$/i.test(p.value))) ?? null;
 }
 
 function bandOf(std: string | null, channel: string | null, band: string | null): WlanInfo['band'] {
@@ -346,7 +406,10 @@ function bandOf(std: string | null, channel: string | null, band: string | null)
 
 function wlan098(params: ParamLike[]): WlanInfo[] {
   const re = /^(InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.(\d+)\.)(.+)$/;
-  const map = new Map<string, WlanInfo & { _std: string | null; _band: string | null }>();
+  const map = new Map<string, WlanInfo & {
+    _std: string | null; _band: string | null; _pass: ParamLike[];
+    _hideStd: ParamLike | null; _hideVendor: ParamLike | null;
+  }>();
   for (const p of params) {
     const m = re.exec(p.path);
     if (!m) continue;
@@ -356,7 +419,8 @@ function wlan098(params: ParamLike[]): WlanInfo[] {
       w = {
         index: Number(m[2]), base, ssid: null, enable: null, status: null, band: null,
         channel: null, security: null, clients: null, passphrasePaths: [], hasPassphrase: false,
-        _std: null, _band: null,
+        passphrase: null, passphraseSource: null, passphraseAt: null, hidden: null, hiddenPath: null, apBase: null,
+        _std: null, _band: null, _pass: [], _hideStd: null, _hideVendor: null,
       };
       map.set(base, w);
     }
@@ -369,13 +433,30 @@ function wlan098(params: ParamLike[]): WlanInfo[] {
     else if (leaf === 'TotalAssociations') w.clients = p.value;
     else if (leaf === 'Standard') w._std = p.value;
     else if (/^(OperatingFrequencyBand|X_[^.]+_(?:Band|FrequencyBand|RFBand))$/.test(leaf)) w._band = p.value;
-    else if (/^(PreSharedKey\.1\.KeyPassphrase|KeyPassphrase|PreSharedKey\.1\.PreSharedKey|X_[^.]+_KeyPassphrase|X_[^.]+_WPAKey)$/.test(leaf)) {
+    else if (leaf === 'SSIDAdvertisementEnabled') w._hideStd = p;
+    else if (WLAN_HIDE_LEAF.test(leaf)) w._hideVendor = p;
+    else if (WLAN_PASS_LEAF.test(leaf)) {
       w.passphrasePaths.push(p.path);
+      w._pass.push(p);
       if (p.value) w.hasPassphrase = true;
     }
   }
   return [...map.values()]
-    .map(({ _std, _band, ...w }) => ({ ...w, band: bandOf(_std, w.channel, _band) }))
+    .map(({ _std, _band, _pass, _hideStd, _hideVendor, ...w }) => {
+      const pass = pickPassphrase(_pass);
+      // Standar: SSIDAdvertisementEnabled=false → tersembunyi. Vendor: X_*_SSIDHide=true.
+      const hidden = _hideStd ? (isTrue(_hideStd.value) === null ? null : !isTrue(_hideStd.value))
+        : _hideVendor ? isTrue(_hideVendor.value) : null;
+      return {
+        ...w,
+        band: bandOf(_std, w.channel, _band),
+        passphrase: pass ? pass.value : null,
+        passphraseSource: pass ? 'onu' as const : null,
+        ...(pass?.updated_at !== undefined ? { _passphraseReadAt: pass.updated_at } : {}),
+        hidden,
+        hiddenPath: (_hideStd ?? _hideVendor)?.path ?? null,
+      };
+    })
     .sort((a, b) => a.index - b.index);
 }
 
@@ -397,6 +478,10 @@ function wlan181(params: ParamLike[]): WlanInfo[] {
       if (am && q.value.replace(/\.$/, '') === ref) { ap = am[1]!; break; }
     }
     const passPaths = ap ? [`${ap}Security.KeyPassphrase`].filter((x) => byPath.has(x)) : [];
+    const passRow = passPaths.length ? params.find((q) => q.path === passPaths[0]) : undefined;
+    const pass = revealSecret(passRow?.value);
+    const advPath = ap ? `${ap}SSIDAdvertisementEnabled` : null;
+    const adv = advPath ? isTrue(byPath.get(advPath)) : null;
     out.push({
       index: Number(m[2]), base, ssid: p.value,
       enable: byPath.get(`${base}Enable`) ?? null,
@@ -408,6 +493,13 @@ function wlan181(params: ParamLike[]): WlanInfo[] {
       clients: ap ? byPath.get(`${ap}AssociatedDeviceNumberOfEntries`) ?? null : null,
       passphrasePaths: passPaths,
       hasPassphrase: passPaths.some((x) => !!byPath.get(x)),
+      passphrase: pass,
+      passphraseSource: pass ? 'onu' : null,
+      passphraseAt: null,
+      ...(pass && passRow?.updated_at !== undefined ? { _passphraseReadAt: passRow.updated_at } : {}),
+      hidden: adv === null ? null : !adv,
+      hiddenPath: advPath && byPath.has(advPath) ? advPath : null,
+      apBase: ap,
     });
   }
   return out.sort((a, b) => a.index - b.index);
@@ -663,6 +755,33 @@ export function buildInsight(params: ParamLike[], model?: DataModel | null): Dev
     wlan: extractWlan(params, dm),
     general: extractGeneral(params),
   };
+}
+
+/**
+ * Lengkapi sandi WiFi/PPPoE dengan nilai yang terakhir DITULIS ACS bila
+ * ONU tidak mengirim sandinya, atau bila penulisan ACS lebih baru dari
+ * pembacaan terakhir (nilai ONU di DB belum diperbarui).
+ */
+export function applySecrets(ins: DeviceInsight, secrets: { path: string; value: string; set_at: number }[]): DeviceInsight {
+  const by = new Map(secrets.map((s) => [s.path, s]));
+  const newer = (readAt: number | undefined, s: { set_at: number }) => readAt === undefined || s.set_at > readAt;
+  for (const c of ins.wan) {
+    const s = by.get(c.passwordPath ?? `${c.base}Password`);
+    if (s && (!c.password || newer(c._passwordReadAt, s))) {
+      c.password = s.value; c.passwordSource = 'acs'; c.passwordAt = s.set_at;
+    }
+    delete c._passwordReadAt;
+  }
+  for (const w of ins.wlan) {
+    const s = w.passphrasePaths.map((p) => by.get(p)).find(Boolean)
+      ?? [...by.values()].filter((x) => x.path.startsWith(w.apBase ?? w.base) && /(KeyPassphrase|PreSharedKey)$/.test(x.path))
+        .sort((a, b) => b.set_at - a.set_at)[0];
+    if (s && (!w.passphrase || newer(w._passphraseReadAt, s))) {
+      w.passphrase = s.value; w.passphraseSource = 'acs'; w.passphraseAt = s.set_at;
+    }
+    delete w._passphraseReadAt;
+  }
+  return ins;
 }
 
 /** Kolom ringkasan untuk tabel devices (lihat Database.setDeviceFields). */

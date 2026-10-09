@@ -127,7 +127,7 @@ Semua membutuhkan autentikasi kecuali `/api/health` dan `/api/login`.
 | Method | Path | Query / Body |
 |--------|------|--------------|
 | GET | `/api/devices` | `?q=` (serial/model/PPPoE/IP/SSID), `?online=1`, `?rxmax=-25` (RX < ambang dBm), `?group=`, `?tag=`, `?limit=` (≤500), `?offset=` → `{items,total}`. Tiap item memuat ringkasan `rx_power`, `tx_power`, `optical_temp`, `pppoe_user`, `pppoe_status`, `wan_ip`, `ssid`, `cpu_usage` (%), `mem_usage` (% RAM terpakai), `data_model` |
-| GET | `/api/devices/:id` | detail + parameter terakhir (password disamarkan → `has_*`) + `insight` `{optical, wan[], wlan[], wcds[], connTypes, system, general, dataModel}` — `system` = `{cpu, cpuSource, memTotalKb, memFreeKb, memUsedPct, memSource}` |
+| GET | `/api/devices/:id` | detail + parameter terakhir (kredensial CR/CWMP disamarkan → `has_*`) + `insight` `{optical, wan[], wlan[], wcds[], connTypes, system, general, dataModel}` — `system` = `{cpu, cpuSource, memTotalKb, memFreeKb, memUsedPct, memSource}`; `wan[]` memuat `password`, `passwordSource` (`onu`\|`acs`), `passwordAt`; `wlan[]` memuat `passphrase`, `passphraseSource`, `passphraseAt`, `hidden`, `hiddenPath` (lihat [sandi terbuka](#sandi-wifi--pppoe-terbuka)) |
 | POST | `/api/devices/:id/refresh` | antrekan baca ulang (path esensial + profil discovery); susulkan `/connect` agar segera Inform |
 | POST | `/api/devices/:id/config` | konfigurasi terstruktur, lihat tabel di bawah |
 | PUT | `/api/devices/:id` | **admin** — ubah `connection_request_url/user/pass`, `cwmp_user/pass`, `group_name`, `notes` |
@@ -154,7 +154,7 @@ perangkat; tebakan dilaporkan di `guessed`.
 
 | `type` | Field | Aksi |
 |--------|-------|------|
-| `wifi` | `wlanIndex`, `ssid?`, `passphrase?` (≥8), `wifiEnable?` | SPV SSID/sandi pada WLANConfiguration.N (TR-181: WiFi.SSID/AccessPoint) |
+| `wifi` | `wlanIndex`, `ssid?`, `passphrase?` (≥8), `wifiEnable?`, `hidden?` | SPV SSID/sandi/aktif pada WLANConfiguration.N (TR-181: WiFi.SSID/AccessPoint). `hidden:true` = sembunyikan SSID (`SSIDAdvertisementEnabled=false`, atau `X_*_SSIDHide=true` bila hanya itu yang dilaporkan ONU); WiFi tetap aktif. Contoh aktif tapi tersembunyi: `{"type":"wifi","wlanIndex":1,"wifiEnable":true,"hidden":true}` |
 | `pppoe` | `target?`, `username?`, `password?`, `vlanId?`, `serviceName?` | SPV kredensial; VLAN & ServiceList di SPV terpisah |
 | `vlan` | `target?`, `vlanId` | SPV VLAN (level koneksi `X_HW_VLAN`/`X_ZTE-COM_VLANID`/`X_FH_VLANID` atau level link `X_CT-COM_WANGponLinkConfig.VLANIDMark`) |
 | `wan-add` | `placement` (`new`/`wcd`/`existing`), `target?` (existing), `wcd?` (wcd), `username`, `password`, `vlanId?`, `name?`, `bridge?`, `connectionType?`, `serviceName?`, `bindLan?` [1-4], `bindSsid?` [1-8], `sequential?`, `extra?` | WAN internet PPPoE: WCD baru, di dalam WCD yang ada, atau isi slot yang ada (mis. `WCD 2 · #1 · PPPoE_Routed`); SPV standar → SPV vendor satu per satu → `Enable=true`; struktur WAN dipetakan ulang |
@@ -168,6 +168,21 @@ perangkat; tebakan dilaporkan di `guessed`.
 pilihan lokasi WAN.
 
 Respons: `{queued, plan[], skipped[], guessed[], tasks[], writes[]}`; HTTP 400 + `error` bila tidak ada yang diantrekan.
+
+#### Sandi WiFi & PPPoE terbuka
+
+`insight.wlan[].passphrase` dan `insight.wan[].password` berisi sandi **apa
+adanya** (tidak disamarkan) untuk pengguna yang login — admin maupun operator.
+
+| `…Source` | Arti |
+|-----------|------|
+| `onu` | dibaca langsung dari ONU |
+| `acs` | ONU mengembalikan string kosong / `****` saat dibaca (diizinkan TR-069), atau penulisan ACS lebih baru dari pembacaan terakhir → nilai terakhir yang **disetel lewat ACS** dan diterima ONU (`…At` = waktunya) |
+| `null` | ONU tidak mengirim sandi dan sandi belum pernah disetel lewat ACS |
+
+Baca ulang sandi dari ONU: `POST /api/devices/:id/read` dengan
+`{"paths":[...insight.wan[].passwordPath, ...insight.wlan[].passphrasePaths]}`
+lalu `/connect`. Reset pabrik menghapus sandi cadangan ACS.
 
 ### Tugas (antrean RPC)
 
