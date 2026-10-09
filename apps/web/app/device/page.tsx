@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Shell from '@/components/Shell';
-import { api, type DeviceRow, type ParamRow, type EventRow, type DeviceInsight, type WanCaps, type WanConn } from '@/lib/api';
+import { api, connectDevice, type ConnectResult, type DeviceRow, type ParamRow, type EventRow, type DeviceInsight, type WanCaps, type WanConn } from '@/lib/api';
 import { Configurator, wanLabel, type ConfigPreset } from '@/components/Configurator';
 import { rxLevel, RX_LABEL, fmtDbm, fmtUptime, loadLevel, fmtPct, fmtKb } from '@/lib/optical';
 import { connectionError } from '@/lib/wan';
@@ -116,8 +116,8 @@ function DeviceBody() {
     if (!id) return;
     setConnectBusy(true);
     try {
-      const r = await api<{ ok: boolean; status?: number; auth?: string }>(
-        `/api/devices/${encodeURIComponent(id)}/connect`, { method: 'POST' });
+      const r = await connectDevice(id);
+      if (!r.ok) { flash(`Gagal hubungi: ${r.error ?? 'ONU tidak menjawab'}`, 'err'); return; }
       flash(`Connection Request diterima ONU (HTTP ${r.status ?? '-'}, ${r.auth ?? '-'}) — ONU akan Inform dalam beberapa detik.`);
       setTimeout(() => void load(), 6000);
     } catch (e) {
@@ -134,12 +134,12 @@ function DeviceBody() {
     try {
       const r = await api<{ paths: number }>(`/api/devices/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
       const note = `${r.paths} parameter diantrekan untuk dibaca.`;
-      try {
-        await api(`/api/devices/${encodeURIComponent(id)}/connect`, { method: 'POST' });
+      const c = await connectDevice(id).catch((e: Error) => ({ ok: false, error: e.message }) as ConnectResult);
+      if (c.ok) {
         flash(`${note} Connection Request diterima — data diperbarui dalam beberapa detik.`);
         setTimeout(() => void load(), 6000);
-      } catch (e) {
-        flash(`${note} Data dibaca saat Inform berikutnya. ${(e as Error).message}`, 'warn');
+      } else {
+        flash(`${note} Data dibaca saat Inform berikutnya. ${c.error ?? ''}`, 'warn');
       }
     } catch (e) {
       flash(`Gagal menyegarkan: ${(e as Error).message}`, 'err');
@@ -163,12 +163,12 @@ function DeviceBody() {
     setConnectBusy(true);
     try {
       await api(`/api/devices/${encodeURIComponent(id)}/read`, { method: 'POST', body: { paths } });
-      try {
-        await api(`/api/devices/${encodeURIComponent(id)}/connect`, { method: 'POST' });
+      const c = await connectDevice(id).catch((e: Error) => ({ ok: false, error: e.message }) as ConnectResult);
+      if (c.ok) {
         flash(`${paths.length} path sandi dibaca dari ONU — diperbarui dalam beberapa detik.`);
         setTimeout(() => void load(), 6000);
-      } catch (e) {
-        flash(`Pembacaan sandi diantrekan; dibaca saat Inform berikutnya. ${(e as Error).message}`, 'warn');
+      } else {
+        flash(`Pembacaan sandi diantrekan; dibaca saat Inform berikutnya. ${c.error ?? ''}`, 'warn');
       }
     } catch (e) {
       flash(`Gagal membaca sandi: ${(e as Error).message}`, 'err');

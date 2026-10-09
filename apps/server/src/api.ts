@@ -324,13 +324,23 @@ function maskDevice<T extends {
       return reply.send({ ok: true, status: r.status, auth: r.auth });
     }
     const host = (() => { try { return new URL(url).host; } catch { return url; } })();
+    const crHost = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
+    // ONU Inform dari IP berbeda dengan host URL CR → ONU di balik NAT/CGNAT
+    // atau IP manajemen tidak dirutekan ke server ACS.
+    const natHint = d.ip_address && crHost && d.ip_address !== crHost
+      ? ` ONU melakukan Inform dari ${d.ip_address}, tetapi URL Connection Request-nya ${host} — server ACS harus bisa merutekan ke ${crHost} (VLAN/rute manajemen), atau ONU berada di balik NAT.`
+      : '';
     const msg = r.reason === 'auth'
       ? `ONU menolak kredensial Connection Request (HTTP ${r.status}, ${r.auth}). Isi user/password di "Akses ACS → CPE", atau biarkan ACS memasang kredensial otomatis (ACS_CR_AUTO).`
       : r.reason === 'unreachable'
-        ? `ONU tidak terjangkau di ${host} (${r.detail}). Biasanya IP manajemen ONU tidak bisa dicapai dari server ACS (NAT/VLAN berbeda). Perintah tetap dikirim saat Inform berikutnya.`
+        ? `ONU tidak terjangkau di ${host} (${r.detail}).${natHint || ' Biasanya IP manajemen ONU tidak bisa dicapai dari server ACS (NAT/VLAN berbeda).'} Perintah tetap dikirim saat Inform berikutnya.`
         : `ONU membalas HTTP ${r.status} untuk Connection Request`;
     db.addEvent(id, 'connect_failed', msg);
-    return reply.code(502).send({ error: msg, reason: r.reason, status: r.status });
+    // HTTP 200 + ok:false (bukan 502): kegagalan menjangkau ONU bukan
+    // kegagalan server ACS. Proxy/tunnel di depan ACS (Nginx, Cloudflare…)
+    // sering mengganti isi respons 502 dengan halaman error sendiri sehingga
+    // alasan ini hilang dan UI hanya menampilkan "HTTP 502".
+    return reply.send({ ok: false, error: msg, reason: r.reason, status: r.status, url: host });
   });
 
   /* ---------------- trafik live (Mbps) ---------------- */

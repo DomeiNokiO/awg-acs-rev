@@ -61,6 +61,7 @@ dev.V.set('InternetGatewayDevice.ManagementServer.ConnectionRequestURL', `http:/
 await sleep(10_500);
 await inform(dev, acs.cwmp, '6 CONNECTION REQUEST');
 r = await acs.call('POST', `/api/devices/${id}/connect`);
-t.check(r.status === 502 && /tidak terjangkau.*ECONNREFUSED/.test(r.body.error), 'ONU tak terjangkau → pesan penyebab');
+t.check(r.status === 200 && r.body.ok === false && r.body.reason === 'unreachable' && /tidak terjangkau.*ECONNREFUSED/.test(r.body.error),
+  'ONU tak terjangkau → 200 ok:false + pesan penyebab (tidak hilang di balik proxy)');
 crServer.close();
 t.done(acs);

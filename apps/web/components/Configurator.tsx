@@ -217,7 +217,9 @@ export function Configurator({ deviceId, serial, insight, caps, preset, onQueued
   const send = async (path: string, body?: Record<string, unknown>) => {
     setBusy(true); setMsg(null);
     try {
-      const r = await api<Report>(`/api/devices/${encodeURIComponent(deviceId)}/${path}`, { method: 'POST', ...(body ? { body } : {}) });
+      const r = await api<Report & { ok?: boolean }>(`/api/devices/${encodeURIComponent(deviceId)}/${path}`, { method: 'POST', ...(body ? { body } : {}) });
+      // /connect membalas ok:false (bukan HTTP error) bila ONU tidak terjangkau.
+      if (r.ok === false) { setMsg({ error: r.error ?? 'ONU tidak menjawab' }); return false; }
       setMsg(r.plan ? r : { queued: 1, plan: [r.task ? `Diantrekan (tugas ${r.task})` : 'Terkirim ke perangkat'] });
       onQueued();
       return true;

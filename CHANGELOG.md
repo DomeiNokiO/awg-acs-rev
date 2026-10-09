@@ -12,6 +12,19 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0j. Pesan "HTTP 502" saat Hubungi/Segarkan
+
+- **Penyebab:** `/connect` membalas HTTP 502 saat ONU tidak bisa dijangkau.
+  Proxy/tunnel di depan ACS mengganti isi respons 502 dengan halaman
+  errornya sendiri, sehingga alasan (tidak terjangkau / kredensial ditolak)
+  hilang dan UI hanya menampilkan "HTTP 502".
+- **Perbaikan:** kegagalan Connection Request kini HTTP 200 `{ok:false, error,
+  reason, url}`; UI menampilkan alasannya. Pesan *tidak terjangkau* menyebut
+  bila IP Inform ONU berbeda dengan host URL Connection Request (ONU di
+  balik NAT / IP manajemen tidak dirutekan ke server ACS).
+
+---
+
 ## 0i. Binding FiberHome, opsi NAT, Katalog Parameter
 
 - **Binding FiberHome wajib**: `X_FH_LanInterface` (daftar objek LAN/WLAN).

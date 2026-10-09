@@ -85,6 +85,17 @@ export async function api<T = unknown>(
   return data as T;
 }
 
+/** Hasil Connection Request (ACS → ONU). */
+export interface ConnectResult { ok: boolean; status?: number; auth?: string; error?: string; reason?: string; url?: string }
+
+/**
+ * Panggil ONU (Connection Request). Gagal menjangkau ONU dikembalikan sebagai
+ * `ok:false` + alasan, bukan exception — hanya error ACS/sesi yang dilempar.
+ */
+export async function connectDevice(id: string): Promise<ConnectResult> {
+  return api<ConnectResult>(`/api/devices/${encodeURIComponent(id)}/connect`, { method: 'POST' });
+}
+
 export async function login(username: string, password: string): Promise<{ username: string; role: string; csrf: string }> {
   const res = await fetch('/api/login', {
     method: 'POST',
