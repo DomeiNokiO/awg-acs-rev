@@ -24,8 +24,9 @@ memakai nomor milik perangkat itu sendiri).
 |---------------|-----|-----|--------|-------|
 | Semua (TR-098) | `IGD.DeviceInfo.ProcessStatus.CPUUsage` | `IGD.DeviceInfo.MemoryStatus.Total` / `.Free` | %, KiB | Standar |
 | Semua (TR-181) | `Device.DeviceInfo.ProcessStatus.CPUUsage` | `Device.DeviceInfo.MemoryStatus.Total` / `.Free` | %, KiB | Standar |
-| ZTE (F-series, firmware yang dipakai di lapangan) | muncul — lihat laporan | muncul — lihat laporan | | **Lapangan** (path persis: jalankan laporan) |
-| FiberHome (HG6543C dll.) | muncul — lihat laporan | muncul — lihat laporan | | **Lapangan** (path persis: jalankan laporan) |
+| FiberHome HG6145D2 (RP2939, RP2958, RP3478, RP4313) | `IGD.DeviceInfo.ProcessStatus.CPUUsage` | `IGD.DeviceInfo.MemoryStatus.Total` / `.Free` | %, KiB (512 MB) | **Lapangan** |
+| FiberHome HG6543C (RP2872) | `IGD.DeviceInfo.X_FH_CpuUsed` | `IGD.DeviceInfo.X_FH_MemUsed` | % (tanpa total) | **Lapangan** |
+| ZTE F660 (V9.0.0P1T7, firmware CMCC) | `IGD.DeviceInfo.ProcessStatus.CPUUsage` | `IGD.DeviceInfo.MemoryStatus.Total` / `.Free` | %, KiB (224 MB) | **Lapangan** |
 | Huawei (gaya `X_HW_`) | `IGD.DeviceInfo.X_HW_CpuUsed` | `IGD.DeviceInfo.X_HW_MemUsed` | % | Pola |
 | Vendor/operator lain | `IGD.DeviceInfo[.X_<vendor>_<Objek>].…CPU…` | `…Mem…Total/Free/Used/Usage` | %, KiB/MB/byte | Pola |
 
@@ -36,16 +37,19 @@ Memori vendor: `< 8192` → MB, `> 8 juta` → byte, selain itu KiB; "…Used"
 bersama total = jumlah, "…Usage/Rate/Percent/Util" = persen. ONU yang tidak
 melaporkan apa pun tampil "—" (tidak ditebak).
 
-> **Catatan lapangan (2026-10):** ZTE dan FiberHome di jaringan pengguna sudah
-> menampilkan CPU & RAM lewat aturan di atas. Path persisnya belum dicatat di
-> sini — jalankan `scripts/param-report.mjs` dan tempel kolom CPU/RAM-nya ke
-> baris ZTE/FiberHome tabel ini.
+> **Catatan lapangan (2026-10):** dua gaya terlihat bahkan di satu merek.
+> FiberHome generasi HG6145D2 dan ZTE F660 mengikuti standar TR-098
+> (`ProcessStatus` / `MemoryStatus`, RAM dalam KiB → ditampilkan persen +
+> total MB), sedangkan FiberHome HG6543C RP2872 hanya punya `X_FH_CpuUsed` /
+> `X_FH_MemUsed` (persen langsung, total RAM tidak dilaporkan). Keduanya
+> ditangani aturan di atas tanpa konfigurasi per model.
 
 ## 2. Redaman optik
 
 | Vendor / tipe | RX (TX menyertai) | Satuan mentah | Bukti |
 |---------------|-------------------|---------------|-------|
-| FiberHome | `IGD.WANDevice.1.X_FH_GponInterfaceConfig.RXPower` | dBm | Lapangan (HG6543C RP2872) |
+| FiberHome GPON | `IGD.WANDevice.1.X_FH_GponInterfaceConfig.RXPower` | dBm | **Lapangan** (HG6543C RP2872; HG6145D2 RP2939/RP2958/RP3478/RP4313) |
+| FiberHome EPON | `IGD.WANDevice.1.X_FH_EponInterfaceConfig.RXPower` | dBm | **Lapangan** (HG6145D2 RP3478 — firmware ini punya subtree EPON dan GPON) |
 | ZTE F670L, F609 baru | `IGD.WANDevice.1.X_ZTE-COM_WANPONInterfaceConfig.RXPower` | dBm | Komunitas¹ |
 | ZTE F660/F609 lama | `IGD.X_CT-COM_GponInterfaceConfig.Stats.RxPower` | 0.1 µW | Komunitas² |
 | ZTE EPON lama | `IGD.X_CT-COM_EponInterfaceConfig.Stats.RxPower` | 0.1 µW | Komunitas² |
@@ -53,6 +57,7 @@ melaporkan apa pun tampil "—" (tidak ditebak).
 | Huawei EG8145V5 dkk. | `IGD.X_HW_DEBUG.AdminTR069.RxPower` | dBm | Komunitas² |
 | Huawei baru | `IGD.WANDevice.1.X_HW_GponInterfaceConfig.RXPower` | dBm | Komunitas³ |
 | Nokia / Alcatel-Lucent | `IGD.X_ALU_OntOpticalParam.RXPower`, `IGD.WANDevice.1.X_ALU-COM_GponInterfaceConfig.RXPower` | dBm | Komunitas¹ ³ |
+| ZTE F660 firmware CMCC (V9.0.0P1T7) | `IGD.WANDevice.1.X_CMCC_GponInterfaceConfig.RXPower` | 0.1 µW (mentah `58` = -22.37 dBm) | **Lapangan** |
 | China Mobile (GM220-S dll.) | `IGD.WANDevice.1.X_CMCC_GponInterfaceConfig.RXPower` (+ `TXPower`, `TransceiverTemperature`, `SupplyVottage`, `BiasCurrent`) | 0.1 µW, 1/256 °C | Komunitas³ |
 | CT-COM / CU / ODM China | `IGD.WANDevice.1.X_CT-COM_GponInterfaceConfig.RXPower`, `X_CU_GponInterfaceConfig.RXPower`, `X_CU_WANEPONInterfaceConfig.OpticalTransceiver.RXPower` | 0.1 µW | Komunitas¹ ³ |
 | ONU Realtek (EPON) | `IGD.X_Realtek_EponInterfaceConfig.Stats.RxPower` | dBm | Komunitas² |
@@ -60,17 +65,31 @@ melaporkan apa pun tampil "—" (tidak ditebak).
 | TR-181 | `Device.Optical.Interface.1.OpticalSignalLevel` / `TransmitOpticalLevel` | 0.001 dBm | Standar |
 
 Konversi: negatif wajar → dBm; negatif besar → ÷10/100/1000; RX positif →
-`10·log10(v/10000)` (0.1 µW); RX 0 atau ≤ -40 dBm → LOS.
+`10·log10(v/10000)` (0.1 µW); RX 0 atau ≤ -40 dBm → LOS. Bila ONU mengisi beberapa subtree (mis. EPON +
+GPON), yang dipakai adalah nilai pertama yang masuk akal — subtree yang
+kosong/0 dilewati.
 
 ## 3. WAN (PPPoE / IPoE)
 
 | Vendor | VLAN koneksi | VLAN link (WCD) | ServiceList | Binding port | ConnectionType | Bukti |
 |--------|--------------|-----------------|-------------|--------------|----------------|-------|
-| FiberHome | `X_FH_VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | – | `PPPoE_Routed` (HG6543C), `IP_Routed` | Lapangan + Komunitas⁴ |
+| FiberHome HG6145D2 | `VLANID` (standar) | – | `X_FH_ServiceList` | – | `PPPoE_Routed` | **Lapangan** |
+| FiberHome HG6543C RP2872 | `VLANID` (standar) | – | `X_FH_ServiceList` | – | `IP_Routed` | **Lapangan** |
+| FiberHome (lainnya) | `X_FH_VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | – | – | Komunitas⁴ |
+| ZTE F660 firmware CMCC | `X_CMCC_VLANIDMark` | – | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` (bila ada) | `PPPoE_Routed` | **Lapangan** — diperlakukan sebagai keluarga CMCC |
 | ZTE | `X_ZTE-COM_VLANEnable` + `X_ZTE-COM_VLANID` | `X_ZTE-COM_WANPONLinkConfig.VLANID` | `X_ZTE-COM_ServiceList` | `X_ZTE-COM_LanInterface` | `IP_Routed` | Komunitas⁵ |
 | Huawei | `X_HW_VLAN` (+ `X_HW_PRI`) | – | `X_HW_SERVICELIST` | `X_HW_LANBIND.Lan{1-4}Enable`, `SSID{1-8}Enable` | `IP_Routed` | Komunitas³ ⁶ |
 | CMCC | `X_CMCC_VLANMode=2` + `X_CMCC_VLANIDMark` | `X_CMCC_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` | `IP_Routed` | Komunitas⁷ |
 | CT-COM | `X_CT-COM_VLANMode=2` + `X_CT-COM_VLANIDMark` | `X_CT-COM_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CT-COM_ServiceList` | `X_CT-COM_LanInterface` | `IP_Routed` | Komunitas (halny HL-4GMV) |
+
+`ConnectionType` WAN baru mengikuti nilai yang sudah dipakai koneksi sejenis
+di ONU itu sendiri (lihat HG6145D2 `PPPoE_Routed` vs HG6543C `IP_Routed` —
+satu merek, beda firmware), jadi tidak perlu disetel per model.
+
+Keluarga vendor ditentukan dari **bukti path dulu**, baru nama pabrikan
+(`vendorwan.ts → detectFamily`): ONU bermerek ZTE dengan parameter `X_CMCC_*`
+diperlakukan sebagai CMCC (VLAN, ServiceList, binding port, dan penulisan
+berurutan).
 
 PPP standar yang hanya ditulis bila ada: `TransportType=PPPoE`,
 `ConnectionTrigger=AlwaysOn`, `PPPAuthenticationProtocol=AUTO`.
@@ -92,18 +111,56 @@ Pasangan yang ditolak ONU dilewati otomatis ke pasangan berikutnya.
 
 | Lokasi sandi | Vendor | Bukti |
 |--------------|--------|-------|
-| `…WLANConfiguration.{i}.PreSharedKey.1.KeyPassphrase` | ZTE, FiberHome, CMCC | Standar / Lapangan |
+| `…WLANConfiguration.{i}.PreSharedKey.1.KeyPassphrase` | ZTE, FiberHome, CMCC | Standar |
+| `…WLANConfiguration.{i}.KeyPassphrase` | FiberHome HG6145D2/HG6543C, ZTE F660 (CMCC) | **Lapangan** |
 | `…WLANConfiguration.{i}.KeyPassphrase` | Huawei | Komunitas¹ |
 | `…WLANConfiguration.{i}.PreSharedKey.1.PreSharedKey` | Huawei (bila hanya ini) | Komunitas |
 | `Device.WiFi.AccessPoint.{i}.Security.KeyPassphrase` | TR-181 | Standar |
 
+Saat ganti sandi, ACS menulis ke **semua** lokasi di atas yang ada di ONU
+tersebut (sebagian firmware punya keduanya).
+
 ---
+
+## Laporan lapangan
+
+### 2026-10-09 — 19 ONU, 6 kombinasi
+
+| Vendor | Model | Firmware | ONU | CPU | RAM | Redaman RX | Contoh |
+|--------|-------|----------|----:|-----|-----|------------|--------|
+| FiberHome | HG6145D2 | RP3478 | 4 | `ProcessStatus.CPUUsage` | `MemoryStatus.Total` | `X_FH_EponInterfaceConfig.RXPower`, `X_FH_GponInterfaceConfig.RXPower` | CPU 4 %, RAM 26,8 % / 512 MB, RX -23,10 dBm |
+| FiberHome | HG6145D2 | RP4313 | 8 | `ProcessStatus.CPUUsage` | `MemoryStatus.Total` | `X_FH_GponInterfaceConfig.RXPower` | CPU 5 %, RAM 28,4 % / 512 MB, RX -10,73 dBm |
+| FiberHome | HG6145D2 | RP2958 | 3 | `ProcessStatus.CPUUsage` | `MemoryStatus.Total` | `X_FH_GponInterfaceConfig.RXPower` | CPU 11 %, RAM 32,4 % / 512 MB, RX -23,67 dBm |
+| FiberHome | HG6145D2 | RP2939 | 1 | `ProcessStatus.CPUUsage` | `MemoryStatus.Total` | `X_FH_GponInterfaceConfig.RXPower` | CPU 6 %, RAM 32,6 % / 512 MB, RX -8,43 dBm |
+| FiberHome | HG6543C | RP2872 | 2 | `X_FH_CpuUsed` | `X_FH_MemUsed` | `X_FH_GponInterfaceConfig.RXPower` | CPU 6 %, RAM 48 %, RX -10,30 dBm |
+| ZTE | F660 | V9.0.0P1T7 | 1 | `ProcessStatus.CPUUsage` | `MemoryStatus.Total` | `X_CMCC_GponInterfaceConfig.RXPower` | CPU 0 %, RAM 36,5 % / 224 MB, RX -22,37 dBm (mentah 58) |
+
+| Vendor | Model | Firmware | VLAN PPPoE | ServiceList | ConnectionType | Sandi WiFi |
+|--------|-------|----------|------------|-------------|----------------|------------|
+| FiberHome | HG6145D2 | RP2939/RP2958/RP3478/RP4313 | `WANPPPConnection.{i}.VLANID` | `X_FH_ServiceList` | `PPPoE_Routed` | `WLANConfiguration.{i}.KeyPassphrase` |
+| FiberHome | HG6543C | RP2872 | `WANPPPConnection.{i}.VLANID` | `X_FH_ServiceList` | `IP_Routed` | `WLANConfiguration.{i}.KeyPassphrase` |
+| ZTE | F660 | V9.0.0P1T7 | `WANPPPConnection.{i}.X_CMCC_VLANIDMark` | `X_CMCC_ServiceList` | `PPPoE_Routed` | `WLANConfiguration.{i}.KeyPassphrase` |
+
+Path CPU/RAM relatif ke `IGD.DeviceInfo.`, redaman ke `IGD.WANDevice.1.`,
+WAN ke `IGD.WANDevice.1.WANConnectionDevice.{i}.`, WiFi ke `IGD.LANDevice.1.`.
+"Contoh" = satu ONU per kombinasi.
+
+Temuan & tindak lanjut:
+- **ZTE F660 V9.0.0P1T7 berfirmware China Mobile**: pabrikan "ZTE", tetapi
+  seluruh ekstensinya `X_CMCC_*`. Sebelumnya keluarga vendor ditentukan dari
+  nama pabrikan → tebakan binding port memakai `X_ZTE-COM_LanInterface`.
+  Sekarang bukti path menang (`detectFamily`), jadi ONU ini memakai skema CMCC.
+- **FiberHome HG6145D2 vs HG6543C**: `ConnectionType` PPPoE berbeda
+  (`PPPoE_Routed` vs `IP_Routed`), CPU/RAM berbeda gaya. Sudah ditangani
+  otomatis (nilai yang teramati per ONU dipakai).
+- **HG6145D2 RP3478** memiliki subtree EPON dan GPON sekaligus; redaman
+  diambil dari subtree yang berisi nilai valid.
 
 ## Membuat laporan dari server Anda
 
 `scripts/param-report.mjs` membaca database ACS (read-only) dan mencetak tabel
-Markdown: path CPU, RAM, redaman, VLAN, ServiceList, ConnectionType, dan lokasi
-sandi WiFi yang **benar-benar dipakai** tiap kombinasi vendor / model / firmware,
+Markdown: path CPU, RAM, redaman, VLAN, ServiceList, ConnectionType, lokasi
+sandi WiFi (semua), dan counter trafik live yang **benar-benar dipakai** tiap kombinasi vendor / model / firmware,
 plus contoh nilai. Tidak memuat serial, IP, username, atau sandi.
 
 ```bash

@@ -12,6 +12,22 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0g. Data lapangan parameter ONU (19 ONU, 6 kombinasi)
+
+- `docs/PARAMETERS.md`: CPU/RAM, redaman, VLAN, ServiceList, ConnectionType,
+  dan lokasi sandi WiFi dari ONU nyata — FiberHome HG6145D2 (RP2939, RP2958,
+  RP3478, RP4313), FiberHome HG6543C RP2872, ZTE F660 V9.0.0P1T7.
+- **Perbaikan:** keluarga vendor kini ditentukan dari bukti path sebelum nama
+  pabrikan (`vendorwan.ts → detectFamily`). ZTE F660 berfirmware China Mobile
+  (`X_CMCC_*`) sebelumnya dianggap ZTE → tebakan binding port
+  `X_ZTE-COM_LanInterface`; sekarang memakai skema CMCC.
+- `scripts/param-report.mjs`: kolom sandi WiFi menampilkan semua lokasi; kolom
+  baru counter trafik live.
+- Tes unit untuk data lapangan (X_FH_CpuUsed/MemUsed, RX 0.1 µW mentah 58,
+  subtree EPON+GPON, detectFamily). `npm test` 37/37, e2e 5 suite lulus.
+
+---
+
 ## 0f. Trafik internet live, referensi parameter, keamanan produksi
 
 **Trafik live (Mbps)** — `apps/server/src/live.ts`, `components/TrafficLive.tsx`:

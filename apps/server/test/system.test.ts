@@ -55,3 +55,10 @@ test('tidak ada data → null; profil & leaf panas mengenali CPU/RAM', () => {
   assert.deepEqual(hotPaths([`${D}ProcessStatus.CPUUsage`, `${D}MemoryStatus.Free`, `${D}MemoryStatus.Total`, `${D}X_HW_MemUsed`]),
     [`${D}ProcessStatus.CPUUsage`, `${D}MemoryStatus.Free`, `${D}X_HW_MemUsed`]);
 });
+
+test('extractSystem: data lapangan FiberHome HG6543C RP2872 (X_FH_CpuUsed / X_FH_MemUsed, %)', () => {
+  const s = extractSystem([P('InternetGatewayDevice.DeviceInfo.X_FH_CpuUsed', '6'), P('InternetGatewayDevice.DeviceInfo.X_FH_MemUsed', '48')]);
+  assert.equal(s.cpu, 6);
+  assert.equal(s.memUsedPct, 48);
+  assert.equal(s.memTotalKb, null);
+});

@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  planVlan, planService, planBinding, planStandard, chooseConnectionType, type Evidence, type Family,
+  planVlan, planService, planBinding, planStandard, chooseConnectionType, detectFamily, type Evidence, type Family,
 } from '../src/vendorwan.ts';
 
 const W = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.';
@@ -73,4 +73,16 @@ test('ConnectionType mengikuti nilai yang dipakai perangkat', () => {
   assert.equal(chooseConnectionType('ip', true, []), 'IP_Bridged');
   assert.equal(chooseConnectionType('ppp', false, ['PPPoE_Routed'], 'IP_Routed'), 'IP_Routed');
   assert.equal(chooseConnectionType('ppp', false, [], 'bad value!'), 'IP_Routed');
+});
+
+test('detectFamily: bukti path menang atas nama pabrikan (data lapangan 2026-10)', () => {
+  // ZTE F660 V9.0.0P1T7 berfirmware China Mobile.
+  assert.equal(detectFamily([`${conn}X_CMCC_VLANIDMark`, `${conn}X_CMCC_ServiceList`], 'ZTE', '001141'), 'cmcc');
+  // FiberHome HG6145D2/HG6543C: VLAN standar `VLANID`, ServiceList vendor.
+  assert.equal(detectFamily([`${conn}VLANID`, `${conn}X_FH_ServiceList`], 'FiberHome', '0019E0'), 'fiberhome');
+  assert.equal(detectFamily([`${conn}X_ZTE-COM_VLANID`], 'ZTE', '001141'), 'zte');
+  // Tanpa bukti → pabrikan / OUI.
+  assert.equal(detectFamily([], 'ZTE', ''), 'zte');
+  assert.equal(detectFamily([], 'CMCC', ''), 'cmcc');
+  assert.equal(detectFamily([], 'VSOL', ''), 'ct');
 });

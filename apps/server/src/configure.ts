@@ -28,7 +28,7 @@ import {
 import { extractWan, extractWlan, extractWcds, observedConnTypes, type WanConn, type DataModel } from './insight.ts';
 import {
   planVlan as vendorVlan, planService as vendorService, planBinding, planStandard,
-  chooseConnectionType, type Evidence, type Family, type Fill,
+  chooseConnectionType, detectFamily, type Evidence, type Family, type Fill,
 } from './vendorwan.ts';
 
 export type XsdType =
@@ -183,26 +183,9 @@ function existsLike(k: Knowledge, path: string): boolean {
   return false;
 }
 
-/** Keluarga vendor: dari bukti path dulu, lalu nama pabrikan/OUI. */
+/** Keluarga vendor: dari bukti path dulu, lalu nama pabrikan/OUI (vendorwan.ts). */
 function familyOf(k: Knowledge): Family {
-  const has = (re: RegExp): boolean => { for (const p of k.known) if (re.test(p)) return true; return false; };
-  if (has(/\.X_HW_VLAN$/)) return 'huawei';
-  if (has(/\.X_ZTE-COM_VLANID$/)) return 'zte';
-  if (has(/\.X_FH_VLANID$/)) return 'fiberhome';
-  if (has(/\.X_CMCC_WANGponLinkConfig\./)) return 'cmcc';
-  if (has(/\.X_CU_WANGponLinkConfig\./)) return 'cu';
-  if (has(/\.X_CT-COM_WANGponLinkConfig\./)) return 'ct';
-  const m = k.manufacturer.toLowerCase();
-  if (/huawei/.test(m) || ['00E0FC', '4C1FCC', '00259E', '001882', 'E0247F'].includes(k.oui)) return 'huawei';
-  if (/zte/.test(m) || ['001141', '00D0D0', 'D0608C', '344B50'].includes(k.oui)) return 'zte';
-  if (/fiberhome|fiber home/.test(m) || ['0019E0', '241815'].includes(k.oui)) return 'fiberhome';
-  // Firmware China Mobile (GM220-S dll.) melaporkan operator sebagai pabrikan.
-  if (/cmcc|china ?mobile|chinamobile/.test(m)) return 'cmcc';
-  if (/unicom|cucc/.test(m)) return 'cu';
-  if (/nokia|alcatel|alcl/.test(m)) return 'nokia';
-  // ODM China tanpa nama operator (CDATA, VSOL, Hioso…) umumnya memakai
-  // profil gateway China Telecom.
-  return 'ct';
+  return detectFamily(k.known, k.manufacturer, k.oui);
 }
 
 /* ------------------------------------------------------------------ *

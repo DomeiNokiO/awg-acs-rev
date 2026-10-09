@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { buildInsight } = await import(join(ROOT, 'apps/server/src/insight.ts'));
+const { buildInsight, trafficCounters } = await import(join(ROOT, 'apps/server/src/insight.ts'));
 
 function dbPath() {
   if (process.env.ACS_DB) return process.env.ACS_DB;
@@ -51,7 +51,7 @@ for (const d of devices) {
   let g = groups.get(key);
   if (!g) {
     g = { vendor: d.manufacturer, model: d.product_class, firmware: d.software_version ?? '?', dataModel: d.data_model ?? ins.dataModel, n: 0,
-      cpu: new Map(), mem: new Map(), rx: new Map(), vlan: new Map(), service: new Map(), connType: new Map(), wifiPass: new Map(), samples: [] };
+      cpu: new Map(), mem: new Map(), rx: new Map(), vlan: new Map(), service: new Map(), connType: new Map(), wifiPass: new Map(), traffic: new Map(), samples: [] };
     groups.set(key, g);
   }
   g.n++;
@@ -62,7 +62,12 @@ for (const d of devices) {
   inc(g.vlan, shape(ppp?.vlanPath));
   inc(g.service, shape(ppp?.serviceListPath));
   inc(g.connType, ppp?.connectionType);
-  inc(g.wifiPass, shape(ins.wlan[0]?.passphrasePaths[0]));
+  // Semua lokasi sandi yang ada (ACS menulis ke semuanya).
+  for (const p of ins.wlan[0]?.passphrasePaths ?? []) inc(g.wifiPass, shape(p));
+  // Counter trafik live yang terbukti ada (pasangan pertama yang dipakai).
+  const known = new Set(params.map((p) => p.path));
+  const tc = trafficCounters(params, ins.dataModel).find((c) => known.has(c.rx) && known.has(c.tx));
+  inc(g.traffic, shape(tc?.rx?.replace(/(Bytes)Received$/, '$1{Received,Sent}')));
   if (g.samples.length < 3) {
     g.samples.push({
       cpu: ins.system.cpu, memPct: ins.system.memUsedPct, memTotalMb: ins.system.memTotalKb ? Math.round(ins.system.memTotalKb / 1024) : null,
@@ -75,7 +80,7 @@ const top = (m) => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
 const rows = [...groups.values()].sort((a, b) => `${a.vendor}${a.model}`.localeCompare(`${b.vendor}${b.model}`));
 
 if (process.argv.includes('--json')) {
-  console.log(JSON.stringify(rows.map((g) => ({ ...g, cpu: top(g.cpu), mem: top(g.mem), rx: top(g.rx), vlan: top(g.vlan), service: top(g.service), connType: top(g.connType), wifiPass: top(g.wifiPass) })), null, 2));
+  console.log(JSON.stringify(rows.map((g) => ({ ...g, cpu: top(g.cpu), mem: top(g.mem), rx: top(g.rx), vlan: top(g.vlan), service: top(g.service), connType: top(g.connType), wifiPass: top(g.wifiPass), traffic: top(g.traffic) })), null, 2));
   process.exit(0);
 }
 
@@ -92,8 +97,8 @@ for (const g of rows) {
   console.log(`| ${g.vendor} | ${g.model} | ${g.firmware} | ${g.n} | ${cell(g.cpu)} | ${cell(g.mem)} | ${cell(g.rx)} | ${ex} |`);
 }
 console.log('\n## WAN & WiFi\n');
-console.log('| Vendor | Model | Firmware | VLAN PPPoE | ServiceList | ConnectionType | Sandi WiFi |');
-console.log('|---|---|---|---|---|---|---|');
+console.log('| Vendor | Model | Firmware | VLAN PPPoE | ServiceList | ConnectionType | Sandi WiFi | Counter trafik live |');
+console.log('|---|---|---|---|---|---|---|---|');
 for (const g of rows) {
-  console.log(`| ${g.vendor} | ${g.model} | ${g.firmware} | ${cell(g.vlan)} | ${cell(g.service)} | ${top(g.connType).join(', ') || '—'} | ${cell(g.wifiPass)} |`);
+  console.log(`| ${g.vendor} | ${g.model} | ${g.firmware} | ${cell(g.vlan)} | ${cell(g.service)} | ${top(g.connType).join(', ') || '—'} | ${cell(g.wifiPass)} | ${cell(g.traffic)} |`);
 }

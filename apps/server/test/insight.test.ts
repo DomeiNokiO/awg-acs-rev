@@ -137,3 +137,17 @@ test('profiler: leaf menarik — PPPoE di instans mana pun, optik vendor, tabel 
   ]);
   assert.deepEqual(prof, [`${base}WANConnectionDevice.2.WANPPPConnection.1.Username`]);
 });
+
+test('extractOptical: data lapangan — ZTE F660 CMCC (0.1 µW) dan FiberHome EPON+GPON', () => {
+  // ZTE F660 V9.0.0P1T7: X_CMCC_GponInterfaceConfig.RXPower mentah 58 → -22.37 dBm.
+  const zte = extractOptical([P('InternetGatewayDevice.WANDevice.1.X_CMCC_GponInterfaceConfig.RXPower', '58')]);
+  assert.equal(zte.rx, -22.37);
+  // HG6145D2 RP3478 punya dua subtree; subtree yang tidak aktif (0 = LOS) dilewati.
+  const fh = extractOptical([
+    P('InternetGatewayDevice.WANDevice.1.X_FH_EponInterfaceConfig.RXPower', '0'),
+    P('InternetGatewayDevice.WANDevice.1.X_FH_GponInterfaceConfig.RXPower', '-23.10'),
+  ]);
+  assert.equal(fh.rx, -23.1);
+  assert.equal(fh.los, false);
+  assert.match(fh.source ?? '', /X_FH_GponInterfaceConfig/);
+});
