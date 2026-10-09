@@ -63,5 +63,13 @@ await inform(dev, acs.cwmp, '6 CONNECTION REQUEST');
 r = await acs.call('POST', `/api/devices/${id}/connect`);
 t.check(r.status === 200 && r.body.ok === false && r.body.reason === 'unreachable' && /tidak terjangkau.*ECONNREFUSED/.test(r.body.error),
   'ONU tak terjangkau → 200 ok:false + pesan penyebab (tidak hilang di balik proxy)');
+
+// FiberHome RP2872: ONU melaporkan port Connection Request di luar rentang TCP.
+dev.V.set('InternetGatewayDevice.ManagementServer.ConnectionRequestURL', 'http://11.171.0.4:1601009200/tr069');
+await sleep(10_500);
+await inform(dev, acs.cwmp, '6 CONNECTION REQUEST');
+r = await acs.call('POST', `/api/devices/${id}/connect`);
+t.check(r.status === 200 && r.body.ok === false && r.body.reason === 'malformed' && /65535/.test(r.body.error),
+  'URL CR port tak valid → reason malformed, pesan menyebut batas 65535');
 crServer.close();
 t.done(acs);

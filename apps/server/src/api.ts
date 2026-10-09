@@ -332,9 +332,11 @@ function maskDevice<T extends {
       : '';
     const msg = r.reason === 'auth'
       ? `ONU menolak kredensial Connection Request (HTTP ${r.status}, ${r.auth}). Isi user/password di "Akses ACS → CPE", atau biarkan ACS memasang kredensial otomatis (ACS_CR_AUTO).`
-      : r.reason === 'unreachable'
-        ? `ONU tidak terjangkau di ${host} (${r.detail}).${natHint || ' Biasanya IP manajemen ONU tidak bisa dicapai dari server ACS (NAT/VLAN berbeda).'} Perintah tetap dikirim saat Inform berikutnya.`
-        : `ONU membalas HTTP ${r.status} untuk Connection Request`;
+      : r.reason === 'malformed'
+        ? `ONU melaporkan URL Connection Request yang tidak bisa dihubungi: ${r.detail} (${url}). ONU ini tidak bisa dipanggil ACS; turunkan interval Inform (tab Konfigurasi → Perangkat) agar ONU sering lapor sendiri. Perintah tetap dikirim saat Inform berikutnya.`
+        : r.reason === 'unreachable'
+          ? `ONU tidak terjangkau di ${host} (${r.detail}).${natHint || ' Biasanya IP manajemen ONU tidak bisa dicapai dari server ACS (NAT/VLAN berbeda).'} Perintah tetap dikirim saat Inform berikutnya.`
+          : `ONU membalas HTTP ${r.status} untuk Connection Request`;
     db.addEvent(id, 'connect_failed', msg);
     // HTTP 200 + ok:false (bukan 502): kegagalan menjangkau ONU bukan
     // kegagalan server ACS. Proxy/tunnel di depan ACS (Nginx, Cloudflare…)
@@ -373,7 +375,14 @@ function maskDevice<T extends {
       else {
         markCr(id);
         const r = await sendConnectionRequest(d.connection_request_url, d.connection_request_user ?? '', d.connection_request_pass ?? '');
-        cr = r.ok ? { ok: true } : { ok: false, error: r.reason === 'unreachable' ? `ONU tidak terjangkau (${r.detail})` : `Connection Request ditolak (HTTP ${r.status ?? '-'})` };
+        cr = r.ok ? { ok: true } : {
+          ok: false,
+          error: r.reason === 'malformed'
+            ? `ONU melaporkan URL Connection Request tidak valid (${r.detail}) — tidak bisa dipanggil; turunkan interval Inform agar ONU lapor sendiri lebih sering`
+            : r.reason === 'unreachable' ? `ONU tidak terjangkau (${r.detail})`
+              : r.reason === 'auth' ? 'Kredensial Connection Request ditolak ONU'
+                : `Connection Request ditolak (HTTP ${r.status ?? '-'})`,
+        };
       }
     }
     db.addEvent(id, 'live', `Trafik live dimulai (${seconds} detik, tiap ${intervalMs / 1000} detik)`);

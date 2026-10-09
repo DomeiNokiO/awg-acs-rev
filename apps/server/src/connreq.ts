@@ -16,9 +16,26 @@ export interface CrResult {
   ok: boolean;
   status?: number;
   auth: 'none' | 'basic' | 'digest';
-  /** 'auth' = kredensial ditolak; 'unreachable' = tak terjangkau; 'http' = status lain. */
-  reason?: 'auth' | 'unreachable' | 'http';
+  /** 'auth' = kredensial ditolak; 'unreachable' = tak terjangkau; 'http' = status lain; 'malformed' = URL/port tidak valid. */
+  reason?: 'auth' | 'unreachable' | 'http' | 'malformed';
   detail?: string;
+}
+
+/**
+ * Validasi URL Connection Request sebelum dipakai. Sebagian firmware
+ * (mis. FiberHome RP2872) melaporkan ConnectionRequestURL dengan port di
+ * luar rentang TCP 16-bit (contoh lapangan: `:1601009200`), sehingga
+ * `new URL()` melempar ERR_INVALID_URL. Port TCP maksimal 65535, jadi URL
+ * seperti ini tidak mungkin dihubungi lewat HTTP — bukan masalah NAT.
+ */
+export function validateCrUrl(url: string): { url: URL } | { error: string } {
+  const raw = (url ?? '').trim();
+  const m = /^https?:\/\/[^/?#]*:(\d{1,10})(?:[/?#]|$)/i.exec(raw);
+  if (m && Number(m[1]) > 65535) {
+    return { error: `port ${m[1]} di luar rentang TCP (maks 65535) — firmware ONU melaporkan port tidak valid` };
+  }
+  try { return { url: new URL(raw) }; }
+  catch { return { error: 'format URL Connection Request tidak valid' }; }
 }
 
 const md5 = (s: string): string => createHash('md5').update(s).digest('hex');
@@ -69,9 +86,8 @@ interface Resp { status: number; headers: Record<string, string | string[] | und
  * apa saja. Sertifikat self-signed CPE diterima (CR hanya pemicu sesi;
  * kredensial dilindungi Digest).
  */
-function get(url: string, timeoutMs: number, authorization?: string): Promise<Resp> {
+function get(u: URL, timeoutMs: number, authorization?: string): Promise<Resp> {
   return new Promise((resolve, reject) => {
-    const u = new URL(url);
     const mod = u.protocol === 'https:' ? https : http;
     const req = mod.request(u, {
       method: 'GET',
@@ -94,9 +110,12 @@ const accepted = (s: number): boolean => (s >= 200 && s < 300) || s === 500 || s
 export async function sendConnectionRequest(
   url: string, user: string, pass: string, timeoutMs = 8000,
 ): Promise<CrResult> {
+  const parsed = validateCrUrl(url);
+  if ('error' in parsed) return { ok: false, auth: 'none', reason: 'malformed', detail: parsed.error };
+  const u = parsed.url;
   let first: Resp;
   try {
-    first = await get(url, timeoutMs);
+    first = await get(u, timeoutMs);
   } catch (e) {
     const err = e as { code?: string; message?: string };
     return { ok: false, auth: 'none', reason: 'unreachable', detail: err.code ?? err.message ?? 'error' };
@@ -107,7 +126,6 @@ export async function sendConnectionRequest(
 
   const wa = first.headers['www-authenticate'];
   const challenge = Array.isArray(wa) ? wa.find((h) => /^Digest/i.test(h)) ?? wa.join(', ') : wa ?? '';
-  const u = new URL(url);
   const uri = `${u.pathname}${u.search}` || '/';
   const digest = parseDigestChallenge(challenge);
   const authorization = digest
@@ -115,7 +133,7 @@ export async function sendConnectionRequest(
     : `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
   const auth = digest ? 'digest' : 'basic';
   try {
-    const second = await get(url, timeoutMs, authorization);
+    const second = await get(u, timeoutMs, authorization);
     if (accepted(second.status)) return { ok: true, status: second.status, auth };
     if (second.status === 401 || second.status === 403) return { ok: false, status: second.status, auth, reason: 'auth' };
     return { ok: false, status: second.status, auth, reason: 'http' };

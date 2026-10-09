@@ -12,6 +12,21 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0k. FiberHome RP2872: URL Connection Request port tak valid
+
+- **Penyebab:** firmware FiberHome RP2872 melaporkan `ConnectionRequestURL`
+  dengan port di luar rentang TCP 16-bit (lapangan: `:1601009200`). Port TCP
+  maksimal 65535, jadi ONU ini tidak mungkin dipanggil lewat HTTP — tetapi
+  pesannya menyalahkan NAT/VLAN, dan `new URL()` melempar ERR_INVALID_URL.
+- **Perbaikan:** `validateCrUrl()` memeriksa port sebelum menghubungi;
+  `/connect` & trafik live memberi `reason:'malformed'` dengan pesan jelas
+  (menyebut batas 65535) dan menyarankan menurunkan interval Inform. Kartu
+  *Akses ACS → CPE* menandai URL port tak valid sejak awal.
+- ONU seperti ini hanya bisa dilayani saat Inform: turunkan interval Inform
+  (Konfigurasi → Perangkat) agar perintah & trafik live cepat berjalan.
+
+---
+
 ## 0j. Pesan "HTTP 502" saat Hubungi/Segarkan
 
 - **Penyebab:** `/connect` membalas HTTP 502 saat ONU tidak bisa dijangkau.

@@ -331,6 +331,18 @@ function DeviceBody() {
                   <label className="form-label mb-1">URL Connection Request</label>
                   <input className="form-control form-control-sm font-monospace"
                     value={crUrl} onChange={(e) => setCrUrl(e.target.value)} />
+                  {(() => {
+                    // Peringatan dini: port di luar 1..65535 (firmware seperti
+                    // FiberHome RP2872) → ONU tak bisa dipanggil lewat HTTP.
+                    const m = /^https?:\/\/[^/?#]*:(\d{1,10})(?:[/?#]|$)/i.exec(crUrl.trim());
+                    return m && Number(m[1]) > 65535 ? (
+                      <div className="small text-danger mt-1">
+                        <i className="fa-solid fa-triangle-exclamation me-1" />
+                        Port {m[1]} di luar rentang TCP (maks 65535) — ONU ini tidak bisa dipanggil (<b>Hubungi</b>/live).
+                        Turunkan interval Inform (Konfigurasi → Perangkat) agar ONU lapor sendiri lebih sering.
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="row g-2">
                   <div className="col-6">

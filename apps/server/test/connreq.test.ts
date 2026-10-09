@@ -3,7 +3,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDigestChallenge, digestAuthorization } from '../src/connreq.ts';
+import { parseDigestChallenge, digestAuthorization, validateCrUrl, sendConnectionRequest } from '../src/connreq.ts';
 import { hotPaths } from '../src/cwmp.ts';
 
 test('Digest: contoh resmi RFC 2617 §3.5', () => {
@@ -33,4 +33,24 @@ test('hotPaths: hanya leaf yang berubah dari waktu ke waktu', () => {
   ]);
   assert.equal(hot.length, 4);
   assert.ok(!hot.some((p) => /Username|VLANID|SSID/.test(p)));
+});
+
+test('validateCrUrl: port di luar rentang TCP (FiberHome RP2872) ditolak jelas', () => {
+  const bad = validateCrUrl('http://11.171.0.4:1601009200/tr069');
+  assert.ok('error' in bad && /65535/.test(bad.error), `harus error port: ${JSON.stringify(bad)}`);
+  const bad2 = validateCrUrl('http://11.171.0.4:160100/tr069');
+  assert.ok('error' in bad2, 'port 160100 > 65535 ditolak');
+  const ok = validateCrUrl('http://11.171.0.4:7547/tr069');
+  assert.ok('url' in ok && ok.url.port === '7547' && ok.url.hostname === '11.171.0.4');
+  const ok2 = validateCrUrl('http://11.171.0.4/tr069'); // tanpa port
+  assert.ok('url' in ok2);
+  const bad3 = validateCrUrl('bukan url');
+  assert.ok('error' in bad3);
+});
+
+test('sendConnectionRequest: URL port tak valid → reason malformed, tanpa koneksi', async () => {
+  const r = await sendConnectionRequest('http://11.171.0.4:1601009200/tr069', '', '');
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'malformed');
+  assert.match(r.detail ?? '', /65535/);
 });
