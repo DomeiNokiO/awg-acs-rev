@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Shell from '@/components/Shell';
-import { api, type DeviceRow, type ParamRow, type EventRow, type DeviceInsight } from '@/lib/api';
+import { api, type DeviceRow, type ParamRow, type EventRow, type DeviceInsight, type WanCaps, type WanConn } from '@/lib/api';
 import { Configurator, wanLabel, type ConfigPreset } from '@/components/Configurator';
 import { rxLevel, RX_LABEL, fmtDbm, fmtUptime, loadLevel, fmtPct, fmtKb } from '@/lib/optical';
 import { connectionError } from '@/lib/wan';
@@ -15,6 +15,7 @@ type Tab = 'summary' | 'config' | 'params' | 'commands' | 'discovered' | 'events
 
 interface Detail {
   insight: DeviceInsight;
+  wanCaps: WanCaps;
   device: DeviceRow;
   params: ParamRow[];
   events: EventRow[];
@@ -408,12 +409,12 @@ function DeviceBody() {
 
             <div className="card-body border-top">
               {tab === 'summary' && (
-                <SummaryPanel device={detail.device} insight={detail.insight} onEdit={openConfig} onDeleteWan={deleteWan} onToggleWan={toggleWan}
+                <SummaryPanel device={detail.device} insight={detail.insight} caps={detail.wanCaps} onEdit={openConfig} onDeleteWan={deleteWan} onToggleWan={toggleWan}
                   onReadSecrets={readSecrets} busy={connectBusy} />
               )}
 
               {tab === 'config' && (
-                <Configurator deviceId={id} serial={detail.device.serial_number} insight={detail.insight} preset={preset} onQueued={load} />
+                <Configurator deviceId={id} serial={detail.device.serial_number} insight={detail.insight} caps={detail.wanCaps} preset={preset} onQueued={load} />
               )}
 
               {tab === 'params' && (
@@ -709,9 +710,37 @@ function Secret({ value, source, at }: { value: string | null; source: 'onu' | '
   );
 }
 
-function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan, onReadSecrets, busy }: {
+/** Ringkas daftar port, mis. [1,2,3,4] → "1–4", [1,3] → "1,3". */
+function portList(n: number[]): string {
+  if (!n.length) return '—';
+  const contiguous = n.every((x, i) => i === 0 || x === n[i - 1]! + 1);
+  return contiguous && n.length > 2 ? `${n[0]}–${n[n.length - 1]}` : n.join(',');
+}
+
+/** Status binding port koneksi WAN; peringatan bila vendor wajib binding. */
+function BindingInfo({ c, caps, onEdit }: { c: WanConn; caps: WanCaps; onEdit: () => void }) {
+  if (!c.binding) return null;
+  const empty = !c.binding.lan.length && !c.binding.ssid.length;
+  const internet = /INTERNET/i.test(c.serviceList ?? '') || (c.kind === 'ppp' && !!c.username);
+  if (empty && caps.bindingRequired && internet && !/Bridged/i.test(c.connectionType ?? '')) {
+    return (
+      <button type="button" className="btn btn-link btn-sm p-0 text-danger text-start small" onClick={onEdit}
+        title={`${caps.bindingParam ?? 'Binding'} kosong — klien LAN/WiFi tidak mendapat internet. Klik untuk binding.`}>
+        <i className="fa-solid fa-triangle-exclamation me-1" />belum di-binding
+      </button>
+    );
+  }
+  return (
+    <div className="text-muted small text-nowrap" title={c.bindingPath ?? ''}>
+      <i className="fa-solid fa-link me-1" />LAN {portList(c.binding.lan)} · SSID {portList(c.binding.ssid)}
+    </div>
+  );
+}
+
+function SummaryPanel({ device, insight, caps, onEdit, onDeleteWan, onToggleWan, onReadSecrets, busy }: {
   device: DeviceRow;
   insight: DeviceInsight;
+  caps: WanCaps;
   onEdit: (p: Omit<ConfigPreset, 'nonce'>) => void;
   onDeleteWan: (base: string, label: string) => void;
   onToggleWan: (base: string, enable: boolean, label: string) => void;
@@ -790,6 +819,7 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan, onRea
                       {c.wcd !== null ? `WCD ${c.wcd} · #${c.instance}` : `#${c.instance}`}
                       {c.connectionType ? ` · ${c.connectionType}` : ''}
                     </div>
+                    <BindingInfo c={c} caps={caps} onEdit={() => onEdit({ mode: 'bind', target: c.base })} />
                     <div className="btn-group btn-group-sm mt-1">
                       {c.enable !== null && (
                         <button className={`btn ${on ? 'btn-outline-success' : 'btn-outline-secondary'}`}
@@ -801,6 +831,10 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan, onRea
                       <button className="btn btn-outline-primary" title="Isi / konfigurasi ulang WAN ini (PPPoE/IPoE, VLAN, binding)"
                         onClick={() => onEdit({ mode: 'wan-add', target: c.base })}>
                         <i className="fa-solid fa-sliders" />
+                      </button>
+                      <button className="btn btn-outline-secondary" title="Binding port LAN / SSID"
+                        onClick={() => onEdit({ mode: 'bind', target: c.base })}>
+                        <i className="fa-solid fa-link" />
                       </button>
                       <button className="btn btn-outline-secondary" title="Ubah PPPoE / VLAN cepat"
                         onClick={() => onEdit({ mode: c.kind === 'ppp' ? 'pppoe' : 'vlan', target: c.base })}>
@@ -828,7 +862,14 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan, onRea
                   <td className="small font-monospace">{c.externalIp || '—'}</td>
                   <td className="small">
                     <div className="num">{c.vlan && c.vlan !== '0' ? c.vlan : '—'}</div>
-                    <div className="text-muted">{c.serviceList || ''}</div>
+                    <div className="text-muted">
+                      {c.serviceList || ''}
+                      {c.nat !== null && !/Bridged/i.test(c.connectionType ?? '') && (
+                        <span className={`badge ms-1 ${/^(1|true)$/i.test(c.nat) ? 'text-bg-light border' : 'text-bg-secondary'}`}>
+                          {/^(1|true)$/i.test(c.nat) ? 'NAT' : 'tanpa NAT'}
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

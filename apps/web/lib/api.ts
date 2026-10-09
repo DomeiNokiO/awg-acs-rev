@@ -188,6 +188,19 @@ export interface WanConn {
   passwordPath: string | null;
   passwordSource: 'onu' | 'acs' | null;
   passwordAt: number | null;
+  /** Port LAN/SSID yang di-binding; null = ONU tidak melaporkan parameter binding. */
+  binding: { lan: number[]; ssid: number[] } | null;
+  bindingPath: string | null;
+}
+
+/** Kemampuan WAN perangkat (dari server): keluarga vendor, binding, port. */
+export interface WanCaps {
+  family: string;
+  /** true = WAN internet tanpa binding tidak meneruskan trafik (FiberHome). */
+  bindingRequired: boolean;
+  bindingParam: string | null;
+  lanPorts: number[];
+  ssids: { index: number; band: string | null; ssid: string | null }[];
 }
 
 export interface WlanInfo {

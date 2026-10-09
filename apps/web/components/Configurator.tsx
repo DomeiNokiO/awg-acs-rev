@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { api, type DeviceInsight, type WanConn } from '@/lib/api';
+import { api, type DeviceInsight, type WanConn, type WanCaps } from '@/lib/api';
 
 /**
  * Konfigurasi terstruktur perangkat: WiFi, PPPoE, VLAN, WAN internet
@@ -13,7 +13,7 @@ import { api, type DeviceInsight, type WanConn } from '@/lib/api';
  * di perangkat, sehingga teknisi tidak perlu hafal struktur tiap merek ONU.
  */
 
-export type ConfigMode = 'wifi' | 'pppoe' | 'vlan' | 'wan-add' | 'device';
+export type ConfigMode = 'wifi' | 'pppoe' | 'vlan' | 'wan-add' | 'bind' | 'device';
 
 export interface ConfigPreset {
   mode: ConfigMode;
@@ -43,14 +43,24 @@ export function wanLabel(c: WanConn): string {
   return `${kind} · ${where}${c.connectionType ? ` · ${c.connectionType}` : ''}${who ? ` · ${who}` : ''}${c.vlan ? ` · VLAN ${c.vlan}` : ''}`;
 }
 
+/** Nilai ServiceList umum (Huawei/FiberHome/ZTE/CMCC); input tetap bebas. */
+const SERVICE_OPTIONS = ['INTERNET', 'TR069', 'VOIP', 'IPTV', 'OTHER', 'TR069_INTERNET', 'TR069_VOIP', 'TR069_VOIP_INTERNET'];
+
+/** Default NAT per layanan — sama dengan server (vendorwan.ts natDefault). */
+const natDefault = (service: string): boolean => {
+  const s = (service || 'INTERNET').toUpperCase();
+  return s.includes('INTERNET') || !/TR069|VOIP|IPTV|OTHER/.test(s);
+};
+
 /** Slot WAN yang belum terisi kredensial/konfigurasi (biasanya dibuat OLT). */
 const isEmptySlot = (c: WanConn): boolean =>
   c.kind === 'ppp' ? !c.username : !c.externalIp || c.externalIp === '0.0.0.0';
 
-export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
+export function Configurator({ deviceId, serial, insight, caps, preset, onQueued }: {
   deviceId: string;
   serial: string;
   insight: DeviceInsight;
+  caps: WanCaps;
   preset?: ConfigPreset | null;
   onQueued: () => void;
 }) {
@@ -86,6 +96,10 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
   const [dns, setDns] = useState('');
   const [bindLan, setBindLan] = useState<number[]>([]);
   const [bindSsid, setBindSsid] = useState<number[]>([]);
+  /** Operator mengubah centang binding — kirim apa adanya (termasuk kosong). */
+  const [bindTouched, setBindTouched] = useState(false);
+  const [nat, setNat] = useState(true);
+  const [natTouched, setNatTouched] = useState(false);
   const [sequential, setSequential] = useState<'' | 'yes' | 'no'>('');
   const [extra, setExtra] = useState('');
   // perangkat
@@ -132,8 +146,38 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
     if (locTouched && locations.some((o) => o.value === location)) return;
     const kindWanted = wanKind === 'pppoe' ? 'ppp' : 'ip';
     const empty = insight.wan.find((c) => c.kind === kindWanted && isEmptySlot(c) && c.wcd !== 1);
-    setLocation(empty ? `existing|${empty.base}` : 'new');
+    // WCD tanpa koneksi yang disiapkan OLT (alur FiberHome: tambah koneksi
+    // PPP di WCD itu lalu diisi) lebih tepat daripada WCD baru.
+    const emptyWcd = insight.wcds.find((w) => w.conns === 0 && w.index !== 1);
+    setLocation(empty ? `existing|${empty.base}` : emptyWcd ? `wcd|${emptyWcd.index}` : 'new');
   }, [mode, wanKind, locations]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Binding default: koneksi yang diisi → binding-nya sekarang; vendor yang
+  // wajib binding (FiberHome) → semua LAN + SSID; lainnya → tanpa binding.
+  const locConn = location.startsWith('existing|') ? insight.wan.find((c) => c.base === location.slice(9)) ?? null : null;
+  useEffect(() => {
+    if (mode !== 'wan-add' || bindTouched) return;
+    const cur = locConn?.binding;
+    if (cur && cur.lan.length + cur.ssid.length > 0) { setBindLan(cur.lan); setBindSsid(cur.ssid); }
+    else if (caps.bindingRequired && !bridge && /INTERNET/i.test(service || 'INTERNET')) {
+      setBindLan(caps.lanPorts); setBindSsid(caps.ssids.map((s) => s.index));
+    } else { setBindLan([]); setBindSsid([]); }
+  }, [mode, location, bridge, service, caps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // NAT mengikuti layanan sampai operator mengubahnya sendiri.
+  useEffect(() => {
+    if (!natTouched) setNat(natDefault(service));
+  }, [service, natTouched]);
+
+  // Mode binding: centang awal = binding koneksi saat ini.
+  useEffect(() => {
+    if (mode !== 'bind') return;
+    const c = insight.wan.find((x) => x.base === target);
+    const cur = c?.binding;
+    if (cur && cur.lan.length + cur.ssid.length > 0) { setBindLan(cur.lan); setBindSsid(cur.ssid); }
+    else if (caps.bindingRequired) { setBindLan(caps.lanPorts); setBindSsid(caps.ssids.map((s) => s.index)); }
+    else { setBindLan([]); setBindSsid([]); }
+  }, [mode, target]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const connTypeOptions = useMemo(() => {
     const observed = wanKind === 'pppoe' ? insight.connTypes.ppp : insight.connTypes.ip;
@@ -163,6 +207,8 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
   useEffect(() => {
     if (mode === 'pppoe' && !pppConns.some((c) => c.base === target)) {
       setTarget((pppConns.find((c) => c.username) ?? pppConns[0])?.base ?? '');
+    } else if (mode === 'bind' && !insight.wan.some((c) => c.base === target)) {
+      setTarget((insight.wan.find((c) => c.kind === 'ppp' && c.username) ?? insight.wan[0])?.base ?? '');
     } else if (mode === 'vlan' && !insight.wan.some((c) => c.base === target)) {
       setTarget(insight.wan[0]?.base ?? '');
     }
@@ -202,6 +248,11 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
     } else if (mode === 'vlan') {
       body.target = target;
       body.vlanId = Number(vlanId);
+    } else if (mode === 'bind') {
+      body.type = 'wan-bind';
+      body.target = target;
+      body.bindLan = bindLan;
+      body.bindSsid = bindSsid;
     } else if (mode === 'wan-add') {
       body.type = wanKind === 'pppoe' ? 'wan-add' : 'wan-ip-add';
       const [placement, ref] = location.split('|');
@@ -214,7 +265,8 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
       if (vlanId) body.vlanId = Number(vlanId);
       if (service) body.serviceName = service;
       if (extra.trim()) body.extra = extra;
-      if (bindLan.length || bindSsid.length) { body.bindLan = bindLan; body.bindSsid = bindSsid; }
+      if (bindTouched || bindLan.length || bindSsid.length) { body.bindLan = bindLan; body.bindSsid = bindSsid; }
+      if (!bridge) body.nat = nat;
       if (sequential) body.sequential = sequential === 'yes';
       if (wanKind === 'pppoe') {
         if (user) body.username = user;
@@ -236,12 +288,11 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
     ['pppoe', 'PPPoE', 'fa-user-lock'],
     ['vlan', 'VLAN', 'fa-tags'],
     ['wan-add', 'WAN Internet', 'fa-globe'],
+    ['bind', 'Binding', 'fa-link'],
     ['device', 'Perangkat', 'fa-power-off'],
   ];
 
   const is181 = insight.dataModel === 'TR-181';
-  const toggle = (list: number[], set: (v: number[]) => void, n: number) =>
-    set(list.includes(n) ? list.filter((x) => x !== n) : [...list, n].sort());
   const locExisting = location.startsWith('existing|');
 
   return (
@@ -471,7 +522,9 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
                 </div>
                 <div className="col-md-4">
                   <label className="form-label small mb-1">Service List</label>
-                  <input className={inputCls} value={service} maxLength={64} onChange={(e) => setService(e.target.value)} placeholder="INTERNET" />
+                  <input className={inputCls} value={service} maxLength={64} onChange={(e) => setService(e.target.value)}
+                    placeholder="INTERNET" list="cfg-services" />
+                  <datalist id="cfg-services">{SERVICE_OPTIONS.map((o) => <option key={o} value={o} />)}</datalist>
                 </div>
                 {wanKind === 'pppoe' && (
                   <>
@@ -507,20 +560,20 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
                     </div>
                   </>
                 )}
-                <div className="col-md-8">
-                  <label className="form-label small mb-1 d-block">Binding port (opsional)</label>
-                  {[1, 2, 3, 4].map((n) => (
-                    <label key={`l${n}`} className="form-check form-check-inline small mb-0">
-                      <input className="form-check-input" type="checkbox" checked={bindLan.includes(n)} onChange={() => toggle(bindLan, setBindLan, n)} />
-                      LAN{n}
-                    </label>
-                  ))}
-                  {[1, 2, 3, 4].map((n) => (
-                    <label key={`s${n}`} className="form-check form-check-inline small mb-0">
-                      <input className="form-check-input" type="checkbox" checked={bindSsid.includes(n)} onChange={() => toggle(bindSsid, setBindSsid, n)} />
-                      SSID{n}
-                    </label>
-                  ))}
+                {!bridge && (
+                  <div className="col-12">
+                    <div className="form-check form-switch mb-0">
+                      <input className="form-check-input" type="checkbox" id="cfg-nat" checked={nat}
+                        onChange={(e) => { setNat(e.target.checked); setNatTouched(true); }} />
+                      <label className="form-check-label small" htmlFor="cfg-nat">
+                        NAT <span className="text-muted">— aktif untuk WAN internet; matikan untuk layanan TR069 / VOIP</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+                <div className="col-12">
+                  <BindingPicker caps={caps} lan={bindLan} ssid={bindSsid}
+                    onChange={(l, w) => { setBindLan(l); setBindSsid(w); setBindTouched(true); }} />
                 </div>
                 <div className="col-md-4">
                   <label className="form-label small mb-1">Pengiriman</label>
@@ -541,9 +594,34 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
               </div>
             )}
 
+            {mode === 'bind' && (
+              <div className="row g-2">
+                <div className="col-12">
+                  <label className="form-label small mb-1">Koneksi WAN</label>
+                  {insight.wan.length ? (
+                    <select className={selectCls} value={target} onChange={(e) => { setTarget(e.target.value); setBindTouched(false); }}>
+                      {insight.wan.map((c) => <option key={c.base} value={c.base}>{wanLabel(c)}</option>)}
+                    </select>
+                  ) : (
+                    <div className="alert alert-warning py-2 small mb-0">Belum ada koneksi WAN terdeteksi.</div>
+                  )}
+                  {conn?.binding && (
+                    <div className="form-text small">
+                      Saat ini: LAN {conn.binding.lan.join(',') || '—'} · SSID {conn.binding.ssid.join(',') || '—'}
+                      {conn.bindingPath && <> · <code>{conn.bindingPath.replace(/\.$/, '').split('.').pop()}</code></>}
+                    </div>
+                  )}
+                </div>
+                <div className="col-12">
+                  <BindingPicker caps={caps} lan={bindLan} ssid={bindSsid}
+                    onChange={(l, w) => { setBindLan(l); setBindSsid(w); setBindTouched(true); }} />
+                </div>
+              </div>
+            )}
+
             <div className="d-flex flex-wrap align-items-center gap-3 mt-3">
               <button className="btn btn-primary btn-sm px-4"
-                disabled={busy || ((mode === 'pppoe' || mode === 'vlan') && !target)}>
+                disabled={busy || ((mode === 'pppoe' || mode === 'vlan' || mode === 'bind') && !target)}>
                 {busy ? 'Mengantre…' : 'Terapkan'}
               </button>
               <small className="text-muted">Dikirim saat ONU berikutnya Inform — tekan <b>Hubungi</b> agar segera.</small>
@@ -572,6 +650,59 @@ export function Configurator({ deviceId, serial, insight, preset, onQueued }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Pilihan port yang di-binding ke WAN: LAN fisik dan SSID yang ada di ONU.
+ * FiberHome wajib binding (X_FH_LanInterface) — WAN internet tanpa binding
+ * tidak meneruskan trafik klien.
+ */
+function BindingPicker({ caps, lan, ssid, onChange }: {
+  caps: WanCaps;
+  lan: number[];
+  ssid: number[];
+  onChange: (lan: number[], ssid: number[]) => void;
+}) {
+  const flip = (list: number[], n: number) => (list.includes(n) ? list.filter((x) => x !== n) : [...list, n].sort((a, b) => a - b));
+  const allSsid = caps.ssids.map((s) => s.index);
+  return (
+    <div className="binding-picker">
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+        <span className="form-label small mb-0">Binding port</span>
+        {caps.bindingRequired
+          ? <span className="badge text-bg-warning">wajib untuk {caps.family === 'fiberhome' ? 'FiberHome' : caps.family}</span>
+          : <span className="badge text-bg-light border">opsional</span>}
+        {caps.bindingParam && <code className="small">{caps.bindingParam}</code>}
+        <span className="ms-auto d-flex gap-1">
+          <button type="button" className="btn btn-sm btn-link py-0" onClick={() => onChange(caps.lanPorts, allSsid)}>Semua</button>
+          <button type="button" className="btn btn-sm btn-link py-0 text-muted" onClick={() => onChange([], [])}>Kosongkan</button>
+        </span>
+      </div>
+      <div className="d-flex flex-wrap gap-1 mb-1" role="group" aria-label="Port LAN">
+        {caps.lanPorts.map((n) => (
+          <button key={`l${n}`} type="button" aria-pressed={lan.includes(n)}
+            className={`btn btn-sm ${lan.includes(n) ? 'btn-primary' : 'btn-outline-secondary'}`}
+            onClick={() => onChange(flip(lan, n), ssid)}>
+            <i className="fa-solid fa-ethernet me-1" />LAN{n}
+          </button>
+        ))}
+      </div>
+      <div className="d-flex flex-wrap gap-1" role="group" aria-label="SSID">
+        {caps.ssids.map((w) => (
+          <button key={`s${w.index}`} type="button" aria-pressed={ssid.includes(w.index)}
+            className={`btn btn-sm ${ssid.includes(w.index) ? 'btn-primary' : 'btn-outline-secondary'}`}
+            title={w.ssid ?? undefined} onClick={() => onChange(lan, flip(ssid, w.index))}>
+            <i className="fa-solid fa-wifi me-1" />SSID{w.index}{w.band ? <span className="opacity-75"> · {w.band}</span> : null}
+          </button>
+        ))}
+      </div>
+      {caps.bindingRequired && !lan.length && !ssid.length && (
+        <div className="small text-danger mt-1">
+          <i className="fa-solid fa-triangle-exclamation me-1" />Tanpa binding, klien LAN/WiFi tidak mendapat internet dari WAN ini.
+        </div>
+      )}
     </div>
   );
 }

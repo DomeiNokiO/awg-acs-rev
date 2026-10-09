@@ -12,6 +12,34 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0i. Binding FiberHome, opsi NAT, Katalog Parameter
+
+- **Binding FiberHome wajib**: `X_FH_LanInterface` (daftar objek LAN/WLAN).
+  WAN internet FiberHome tanpa pilihan port otomatis di-binding ke semua LAN
+  (`LANEthernetInterfaceNumberOfEntries`, default 4) + semua SSID. Slot yang
+  sudah ber-binding dipertahankan. Tabel WAN menampilkan binding tiap
+  koneksi dan menandai WAN FiberHome **"belum di-binding"**; aksi 🔗 / tab
+  **Binding** (`wan-bind`) memperbaikinya. Binding Huawei (`X_HW_LANBIND`)
+  juga terbaca.
+- **NAT**: sakelar di WAN Internet; default aktif untuk INTERNET, mati untuk
+  TR069/VOIP/IPTV. Badge NAT / tanpa NAT di tabel WAN. ServiceList dengan
+  daftar pilihan (INTERNET, TR069, VOIP, …).
+- **Lokasi default WAN**: slot kosong → WCD tanpa koneksi yang disiapkan OLT
+  (tambah koneksi PPP di WCD itu lalu isi) → WCD baru.
+- **Sandi**: lokasi sandi WiFi vendor diperluas (`X_*Passphrase/Password/WPAKey/PSK`,
+  `PreSharedKey.1.X_*_KeyPassphrase`) dengan validasi isi (8–64 karakter,
+  bukan flag). Profil v7 (upgrade lokal, tanpa GPN). Laporan
+  `param-report.mjs` punya bagian *Sandi (diagnostik)*.
+- **Katalog Parameter dirombak**: panel Sumber (Semua / TR-098 / TR-181 /
+  per model), tabel dalam kartu dengan path berinduk redup + leaf tebal,
+  tipe, akses R/RW, dukungan (standar / N model), filter grup & ekstensi
+  vendor, pencarian instan, paginasi 50. Tombol Impor yang sebelumnya tidak
+  berfungsi diperbaiki.
+- Tes: 43 unit; e2e `wan.mjs` + binding otomatis/manual FiberHome, ZTE tanpa
+  binding, WAN TR069 tanpa NAT.
+
+---
+
 ## 0h. Sandi terbuka, sembunyikan SSID, firmware berbeda di model sama
 
 - **Sandi WiFi & PPPoE terbuka** di Ringkasan dan Konfigurasi (+ salin), dengan

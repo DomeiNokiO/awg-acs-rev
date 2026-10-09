@@ -501,3 +501,20 @@ code, kbd, pre, .font-monospace { font-family: ui-monospace, SFMono-Regular, Men
 .key.up { background: var(--series-up); }
 .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: livepulse 1.2s ease-in-out infinite; }
 @keyframes livepulse { 50% { opacity: .3; } }
+
+/* ---- Katalog parameter --------------------------------------------------- */
+.catalog-sources .list-group-item { border-color: var(--line); padding: .55rem 1rem; font-size: .85rem; }
+.catalog-sources .list-group-item .sub { color: var(--ink-3); }
+.catalog-sources .list-group-item.active { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--line); box-shadow: inset 3px 0 0 var(--brand); }
+.catalog-sources .list-group-item.active .sub { color: var(--ink-2); }
+.catalog-sources .catalog-sources-label {
+  background: #f8fafc; color: var(--ink-3); font-size: .7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; padding: .45rem 1rem;
+}
+.catalog-sources { max-height: calc(100vh - var(--topbar-h) - 7rem); overflow: auto; position: sticky; top: calc(var(--topbar-h) + 1rem); }
+.table-catalog { min-width: 560px; }
+.catalog-path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; overflow-wrap: break-word; }
+.catalog-path .pfx { color: var(--ink-3); }
+.catalog-path .leaf { color: var(--ink); font-weight: 600; }
+.catalog-path .copy { opacity: 0; color: var(--ink-3); transition: opacity .15s; }
+tr:hover .catalog-path .copy, .catalog-path .copy:focus-visible { opacity: 1; }

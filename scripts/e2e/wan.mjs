@@ -24,15 +24,36 @@ const s3 = `${W}3.WANPPPConnection.1.`;
 t.check(fh.V.get(`${s3}Username`) === 'pel01@isp' && fh.V.get(`${s3}Enable`) === 'true' && fh.V.get(`${s3}ConnectionType`) === 'PPPoE_Routed', 'slot terisi, aktif, ConnectionType dipertahankan');
 t.check(fh.V.get(`${W}3.X_FH_WANGponLinkConfig.VLANID`) === '200' && fh.V.get(`${s3}X_FH_VLANID`) === '200', 'VLAN FiberHome link + koneksi');
 t.check(/Enable=true$/.test(fh.spvLog.at(-1) ?? ''), 'Enable=true dikirim terakhir');
+const BIND_ALL = 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1,InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2,'
+  + 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.3,InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.4,'
+  + 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1';
+t.check(fh.V.get(`${s3}X_FH_LanInterface`) === BIND_ALL, 'FiberHome: X_FH_LanInterface otomatis LAN1-4 + SSID1 (wajib binding)');
+t.check(fh.V.get(`${s3}NATEnabled`) === 'true', 'FiberHome: NAT aktif untuk WAN INTERNET');
 r = await acs.call('POST', `/api/devices/${idOf(fh)}/config`, { type: 'wan-add', placement: 'new', username: 'pel02@isp', password: 'rahasia2', vlanId: 300 });
 await settle(fh, acs.cwmp, '6 CONNECTION REQUEST');
 t.check(fh.V.get(`${W}4.WANPPPConnection.1.ConnectionType`) === 'PPPoE_Routed' && fh.V.get(`${W}4.X_FH_WANGponLinkConfig.VLANID`) === '300', 'WAN baru WCD 4 memakai PPPoE_Routed');
+t.check(fh.V.get(`${W}4.WANPPPConnection.1.X_FH_LanInterface`) === BIND_ALL, 'FiberHome WAN baru: binding otomatis');
+// Binding manual lewat aksi Binding (wan-bind) + terbaca di insight.
+r = await acs.call('POST', `/api/devices/${idOf(fh)}/config`, { type: 'wan-bind', target: `${W}4.WANPPPConnection.1.`, bindLan: [1, 2], bindSsid: [1] });
+await settle(fh, acs.cwmp, '6 CONNECTION REQUEST');
+t.check(fh.V.get(`${W}4.WANPPPConnection.1.X_FH_LanInterface`) === 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1,InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2,InternetGatewayDevice.LANDevice.1.WLANConfiguration.1',
+  'wan-bind: LAN1,LAN2 + SSID1');
+det = await acs.get(`/api/devices/${idOf(fh)}`);
+const b4 = det.insight.wan.find((c) => c.base === `${W}4.WANPPPConnection.1.`)?.binding;
+t.check(JSON.stringify(b4) === JSON.stringify({ lan: [1, 2], ssid: [1] }) && det.wanCaps.bindingRequired && det.wanCaps.bindingParam === 'X_FH_LanInterface',
+  `insight binding ${JSON.stringify(b4)}, wanCaps ${det.wanCaps.family}/${det.wanCaps.bindingParam} LAN ${det.wanCaps.lanPorts.join(',')}`);
 
 // ZTE: koneksi baru di WCD kosong yang ada
 r = await acs.call('POST', `/api/devices/${idOf(zte)}/config`, { type: 'wan-add', placement: 'wcd', wcd: 3, username: 'z@isp', password: 'pw123456', vlanId: 400 });
 t.check(r.status === 200, 'ZTE WAN di WCD 3');
 await settle(zte, acs.cwmp, '6 CONNECTION REQUEST');
 t.check(zte.V.get(`${W}3.WANPPPConnection.1.X_ZTE-COM_VLANID`) === '400' && zte.V.get(`${W}3.WANPPPConnection.1.X_ZTE-COM_VLANEnable`) === 'true', 'ZTE VLANID + VLANEnable');
+t.check(!zte.V.has(`${W}3.WANPPPConnection.1.X_ZTE-COM_LanInterface`), 'ZTE: tanpa binding otomatis (tidak wajib)');
+// WAN layanan TR069 → tanpa NAT (default per layanan).
+r = await acs.call('POST', `/api/devices/${idOf(zte)}/config`, { type: 'wan-ip-add', placement: 'new', vlanId: 700, serviceName: 'TR069', name: 'TR069_2' });
+await settle(zte, acs.cwmp, '6 CONNECTION REQUEST');
+const trBase = [...zte.V.keys()].find((k) => zte.V.get(k) === 'TR069_2')?.replace(/Name$/, '');
+t.check(trBase && zte.V.get(`${trBase}NATEnabled`) === 'false', `WAN TR069: NATEnabled=false (${trBase?.split('.').slice(-4).join('.')})`);
 
 // Huawei: IPoE + binding
 r = await acs.call('POST', `/api/devices/${idOf(hw)}/config`, { type: 'wan-ip-add', placement: 'new', vlanId: 500, bindLan: [3], bindSsid: [2], name: 'IPTV' });

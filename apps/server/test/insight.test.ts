@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  normalizePower, extractOptical, extractWan, extractWlan, primaryPppoe, buildInsight, summaryFields, applySecrets, revealSecret,
+  normalizePower, extractOptical, extractWan, extractWlan, primaryPppoe, buildInsight, summaryFields, applySecrets, revealSecret, parseLanInterface,
 } from '../src/insight.ts';
 import { isInterestingLeaf, profileFromNodes } from '../src/profiler.ts';
 
@@ -197,4 +197,25 @@ test('applySecrets: nilai ONU menang bila lebih baru, cadangan ACS bila ONU koso
   assert.equal(ins.wlan[0]!.passphraseSource, 'onu');
   assert.equal(ins.wan[0]!.password, null);
   assert.ok(!('_passwordReadAt' in ins.wan[0]!));
+});
+
+test('binding WAN: X_FH_LanInterface (daftar objek) dan X_HW_LANBIND (boolean per port)', () => {
+  const L = 'InternetGatewayDevice.LANDevice.1.';
+  assert.deepEqual(parseLanInterface(`${L}LANEthernetInterfaceConfig.1,${L}LANEthernetInterfaceConfig.4,${L}WLANConfiguration.2`), { lan: [1, 4], ssid: [2] });
+  assert.deepEqual(parseLanInterface(''), { lan: [], ssid: [] });
+  const c = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.';
+  const [fh] = extractWan([P(`${c}Username`, 'u'), P(`${c}X_FH_LanInterface`, `${L}LANEthernetInterfaceConfig.2,${L}LANEthernetInterfaceConfig.1`)]);
+  assert.deepEqual(fh!.binding, { lan: [1, 2], ssid: [] });
+  assert.equal(fh!.bindingPath, `${c}X_FH_LanInterface`);
+  const [hw] = extractWan([P(`${c}Username`, 'u'), P(`${c}X_HW_LANBIND.Lan3Enable`, '1'), P(`${c}X_HW_LANBIND.Lan1Enable`, 'true'),
+    P(`${c}X_HW_LANBIND.Lan2Enable`, '0'), P(`${c}X_HW_LANBIND.SSID1Enable`, '1')]);
+  assert.deepEqual(hw!.binding, { lan: [1, 3], ssid: [1] });
+});
+
+test('sandi WiFi vendor: leaf mirip sandi berisi flag/enum tidak ditampilkan', () => {
+  const b = 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.';
+  const w = extractWlan([P(`${b}SSID`, 'A'), P(`${b}X_FH_WPAPSK`, 'true'), P(`${b}X_FH_WPAPassword`, 'rumahKita88')]);
+  assert.equal(w[0]!.passphrase, 'rumahKita88');
+  const w2 = extractWlan([P(`${b}SSID`, 'A'), P(`${b}X_XX_PSK`, 'WPA2')]);
+  assert.equal(w2[0]!.passphrase, null);
 });

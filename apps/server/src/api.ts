@@ -26,7 +26,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { loadCatalog, catalogWritePath, writeCatalogFile, CATALOG_FILE } from './catalog.ts';
 import { validateCatalog } from './catalog-schema.ts';
 import { validatePreset, applyPresets, type PresetCondition, type PresetAction } from './presets.ts';
-import { applyConfig, CONFIG_TYPES, type ConfigRequest } from './configure.ts';
+import { applyConfig, wanCapabilities, CONFIG_TYPES, type ConfigRequest } from './configure.ts';
 import { buildInsight, applySecrets, trafficCounters } from './insight.ts';
 import { sendConnectionRequest, crCooldown, markCr } from './connreq.ts';
 import { WebhookDispatcher, type DeliveryLogEntry } from './webhooks.ts';
@@ -231,6 +231,7 @@ export function registerApiRoutes(
     );
     return reply.send({
       insight,
+      wanCaps: wanCapabilities(ctx, db, id),
       device: {
         ...maskDevice(d),
         online: !!d.last_inform_at && Date.now() - d.last_inform_at < 30 * 60 * 1000,

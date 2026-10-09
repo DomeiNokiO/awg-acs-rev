@@ -219,9 +219,31 @@ export interface WanConn {
   passwordAt: number | null;
   /** Waktu nilai sandi dibaca dari ONU (internal, untuk membandingkan dengan ACS). */
   _passwordReadAt?: number;
+  /** Port yang di-binding ke WAN ini; null = ONU tidak melaporkan parameter binding. */
+  binding: { lan: number[]; ssid: number[] } | null;
+  /** `X_*_LanInterface` (daftar objek) atau `X_HW_LANBIND.` (boolean per port). */
+  bindingPath: string | null;
+}
+
+/**
+ * Isi `X_*_LanInterface`: daftar objek LAN/WLAN dipisah koma, mis.
+ * "InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1,…WLANConfiguration.1".
+ */
+export function parseLanInterface(v: string): { lan: number[]; ssid: number[] } {
+  const lan: number[] = [];
+  const ssid: number[] = [];
+  for (const part of v.split(/[,;\s]+/)) {
+    const l = /LANEthernetInterfaceConfig\.(\d+)/.exec(part);
+    const w = /WLANConfiguration\.(\d+)/.exec(part);
+    if (l) lan.push(Number(l[1]));
+    else if (w) ssid.push(Number(w[1]));
+  }
+  const u = (a: number[]) => [...new Set(a)].sort((x, y) => x - y);
+  return { lan: u(lan), ssid: u(ssid) };
 }
 
 const WAN98 = /^(InternetGatewayDevice\.WANDevice\.(\d+)\.WANConnectionDevice\.(\d+)\.(WANPPPConnection|WANIPConnection)\.(\d+)\.)([^.]+)$/;
+const HWBIND98 = /^(InternetGatewayDevice\.WANDevice\.\d+\.WANConnectionDevice\.(\d+)\.(WANPPPConnection|WANIPConnection)\.(\d+)\.)X_HW_LANBIND\.(Lan|SSID)(\d+)Enable$/;
 const LINK98 = /^InternetGatewayDevice\.WANDevice\.\d+\.WANConnectionDevice\.(\d+)\.(X_[^.]*(?:Link|LINK)Config|X_FH_VLANConfig\.\d+)\.(VLANIDMark|VLANID|VLANId|VLAN)$/;
 /** Nama parameter VLAN di level koneksi (vendor & standar). */
 const VLAN_LEAF = /^(?:X_[A-Za-z0-9-]+_)?(?:VLANID|VLANIDMark|VLANId|VLAN|VlanId|VLANIDTag)$/;
@@ -235,6 +257,7 @@ function emptyConn(base: string, kind: 'ppp' | 'ip', wcd: number | null, instanc
     vlan: null, vlanPath: null, serviceList: null, serviceListPath: null,
     mac: null, uptime: null, lastError: null, nat: null,
     password: null, passwordPath: null, passwordSource: null, passwordAt: null,
+    binding: null, bindingPath: null,
   };
 }
 
@@ -262,7 +285,8 @@ function fillCommon(c: WanConn, leaf: string, value: string, path: string, at?: 
     case 'LastConnectionError': c.lastError = value; break;
     case 'NATEnabled': c.nat = value; break;
     default:
-      if (VLAN_LEAF.test(leaf) && c.vlanPath === null) { c.vlan = value; c.vlanPath = path; }
+      if (/^X_[A-Za-z0-9-]+_LanInterface$/.test(leaf)) { c.binding = parseLanInterface(value); c.bindingPath = path; }
+      else if (VLAN_LEAF.test(leaf) && c.vlanPath === null) { c.vlan = value; c.vlanPath = path; }
       else if (SERVICE_LEAF.test(leaf) && /ServiceList|SERVICELIST/.test(leaf)) {
         c.serviceList = value; c.serviceListPath = path;
       }
@@ -272,16 +296,24 @@ function fillCommon(c: WanConn, leaf: string, value: string, path: string, at?: 
 function wan098(params: ParamLike[]): WanConn[] {
   const map = new Map<string, WanConn>();
   const linkVlan = new Map<number, { value: string; path: string }>();
+  const conn = (base: string, kind: string, wcd: string, inst: string): WanConn => {
+    let c = map.get(base);
+    if (!c) { c = emptyConn(base, kind === 'WANPPPConnection' ? 'ppp' : 'ip', Number(wcd), Number(inst)); map.set(base, c); }
+    return c;
+  };
   for (const p of params) {
+    // Binding Huawei: X_HW_LANBIND.Lan{N}Enable / SSID{N}Enable (boolean per port).
+    const hb = HWBIND98.exec(p.path);
+    if (hb) {
+      const c = conn(hb[1]!, hb[3]!, hb[2]!, hb[4]!);
+      c.binding ??= { lan: [], ssid: [] };
+      c.bindingPath = `${hb[1]}X_HW_LANBIND.`;
+      if (/^(1|true)$/i.test(p.value)) (hb[5] === 'Lan' ? c.binding.lan : c.binding.ssid).push(Number(hb[6]));
+      continue;
+    }
     const m = WAN98.exec(p.path);
     if (m) {
-      const base = m[1]!;
-      let c = map.get(base);
-      if (!c) {
-        c = emptyConn(base, m[4] === 'WANPPPConnection' ? 'ppp' : 'ip', Number(m[3]), Number(m[5]));
-        map.set(base, c);
-      }
-      fillCommon(c, m[6]!, p.value, p.path, p.updated_at);
+      fillCommon(conn(m[1]!, m[4]!, m[3]!, m[5]!), m[6]!, p.value, p.path, p.updated_at);
       continue;
     }
     const l = LINK98.exec(p.path);
@@ -294,6 +326,7 @@ function wan098(params: ParamLike[]): WanConn[] {
       const lv = linkVlan.get(c.wcd);
       if (lv) { c.vlan = lv.value; c.vlanPath = lv.path; }
     }
+    if (c.binding) { c.binding.lan.sort((a, b) => a - b); c.binding.ssid.sort((a, b) => a - b); }
   }
   return [...map.values()].sort((a, b) => (a.wcd ?? 0) - (b.wcd ?? 0) || a.instance - b.instance);
 }
@@ -377,7 +410,7 @@ export interface WlanInfo {
 }
 
 /** Leaf sandi WiFi TR-098, urut prioritas tampilan (passphrase dulu, PSK hex terakhir). */
-const WLAN_PASS_LEAF = /^(PreSharedKey\.1\.KeyPassphrase|KeyPassphrase|X_[^.]+_KeyPassphrase|X_[^.]+_WPAKey|PreSharedKey\.1\.PreSharedKey)$/;
+const WLAN_PASS_LEAF = /^(?:PreSharedKey\.1\.(?:KeyPassphrase|PreSharedKey|X_[^.]+_KeyPassphrase)|KeyPassphrase|X_[A-Za-z0-9-]+_[A-Za-z]*(?:Passphrase|PassPhrase|Password|WPAKey|WpaKey|PSK|Psk))$/;
 /** Leaf vendor "sembunyikan SSID" (true = tersembunyi), dipakai bila standar tidak ada. */
 const WLAN_HIDE_LEAF = /^X_[A-Za-z0-9-]+_(?:SSIDHide|HideSSID|SSIDHidden|HiddenSSID)$/;
 
@@ -390,9 +423,16 @@ function pickPassphrase(cands: ParamLike[]): ParamLike | null {
     const leaf = /\.(PreSharedKey\.1\.KeyPassphrase|PreSharedKey\.1\.PreSharedKey|[^.]+)$/.exec(p.path)?.[1] ?? '';
     return leaf === 'PreSharedKey.1.PreSharedKey' ? 1 : 0;
   };
-  // PSK hex 64 karakter adalah kunci turunan, bukan sandi yang diketik pengguna.
+  // PSK hex 64 karakter adalah kunci turunan, bukan sandi yang diketik
+  // pengguna. Sandi WPA 8–63 karakter: nilai lain (true/false, nama mode)
+  // dari leaf vendor yang namanya mirip bukan sandi.
   return [...cands].sort((a, b) => order(a) - order(b))
-    .find((p) => revealSecret(p.value) && !(/PreSharedKey\.1\.PreSharedKey$/.test(p.path) && /^[0-9a-f]{64}$/i.test(p.value))) ?? null;
+    .find((p) => isPassphraseValue(p.value) && !(/PreSharedKey\.1\.PreSharedKey$/.test(p.path) && /^[0-9a-f]{64}$/i.test(p.value))) ?? null;
+}
+
+/** Nilai yang layak dianggap sandi WPA (bukan kosong/bintang/boolean/enum pendek). */
+export function isPassphraseValue(v: string | null | undefined): v is string {
+  return !!revealSecret(v) && v!.length >= 8 && v!.length <= 64 && !/^(true|false)$/i.test(v!);
 }
 
 function bandOf(std: string | null, channel: string | null, band: string | null): WlanInfo['band'] {

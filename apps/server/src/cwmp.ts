@@ -27,7 +27,7 @@ const MAX_BODY = 1024 * 1024;
  * dipetakan ulang otomatis saat Inform berikutnya — profil lama (sebelum
  * perbaikan discovery) tidak memuat redaman/PPPoE di WANConnectionDevice.N.
  */
-export const PROFILE_VERSION = 6;
+export const PROFILE_VERSION = 7;
 
 /**
  * Upgrade profil ringan: dari versi ini ke PROFILE_VERSION cukup memetakan
@@ -41,6 +41,8 @@ export const PROFILE_INCREMENTAL: Record<number, (root: string) => string[]> = {
   // v5 → v6: sandi PPPoE/WiFi & siaran SSID — tanpa GPN, cukup dari hasil
   // discovery yang sudah tersimpan (extendProfileLocally).
   5: () => [],
+  // v6 → v7: pola sandi WiFi vendor diperluas + jumlah port LAN — juga lokal.
+  6: () => [],
 };
 
 /** Objek milik perangkat ini yang leaf-nya boleh ditambah dari data discovery model. */

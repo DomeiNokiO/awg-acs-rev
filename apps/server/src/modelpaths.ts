@@ -37,6 +37,8 @@ export const PATH_INFO_098: string[] = [
   `${P}ManagementServer.PeriodicInformInterval`,
   `${P}LANDevice.1.LANHostConfigManagement.IPInterface.1.IPInterfaceIPAddress`,
   `${P}LANDevice.1.Hosts.HostNumberOfEntries`,
+  // Jumlah port LAN — dipakai menyusun binding WAN (FiberHome X_FH_LanInterface).
+  `${P}LANDevice.1.LANEthernetInterfaceNumberOfEntries`,
   // Suhu perangkat standar TR-098 (dipakai bila ONU tak punya suhu optik)
   `${P}DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value`,
   // Beban CPU (%) & RAM (KiB) standar TR-098 (InternetGatewayDevice:1.9+).

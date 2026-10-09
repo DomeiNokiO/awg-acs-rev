@@ -25,9 +25,9 @@ import {
   enqueueWrite, enqueueAddObject, enqueueDeleteObject, deviceModel, WRITE_TTL_MS,
   type CwmpContext,
 } from './cwmp.ts';
-import { extractWan, extractWlan, extractWcds, observedConnTypes, type WanConn, type DataModel } from './insight.ts';
+import { extractWan, extractWlan, extractWcds, observedConnTypes, isPassphraseValue, type WanConn, type DataModel } from './insight.ts';
 import {
-  planVlan as vendorVlan, planService as vendorService, planBinding, planStandard,
+  planVlan as vendorVlan, planService as vendorService, planBinding, planStandard, bindingRequired, natDefault,
   chooseConnectionType, detectFamily, type Evidence, type Family, type Fill,
 } from './vendorwan.ts';
 
@@ -45,10 +45,11 @@ export type ConfigType =
   | 'wan-ip-add'  // buat WAN IP (DHCP/Static/Bridge) baru
   | 'wan-delete'  // hapus koneksi WAN
   | 'wan-enable'  // aktif/nonaktifkan koneksi WAN
+  | 'wan-bind'    // binding port LAN/SSID ke koneksi WAN yang ada
   | 'inform-interval'; // interval Inform periodik ONU
 
 export const CONFIG_TYPES: ConfigType[] = [
-  'wifi', 'pppoe', 'vlan', 'wan-add', 'wan-ip-add', 'wan-delete', 'wan-enable', 'inform-interval',
+  'wifi', 'pppoe', 'vlan', 'wan-add', 'wan-ip-add', 'wan-delete', 'wan-enable', 'wan-bind', 'inform-interval',
 ];
 
 /**
@@ -92,6 +93,8 @@ export interface ConfigRequest {
   /** Kirim satu parameter per SetParameterValues (ONU yang tidak konsisten). */
   sequential?: boolean;
   /** Binding port: nomor LAN (1-4) dan SSID (1-4) yang dipakai WAN ini. */
+  /** NAT untuk mode route; default: ya untuk INTERNET, tidak untuk TR069/VOIP. */
+  nat?: boolean;
   bindLan?: number[];
   bindSsid?: number[];
   // wan-enable
@@ -361,7 +364,11 @@ function applyWifi(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledg
       // memakai WLANConfiguration.N.KeyPassphrase, ZTE/FiberHome
       // PreSharedKey.1.KeyPassphrase; sebagian firmware punya keduanya.
       const cands = [`${base}PreSharedKey.1.KeyPassphrase`, `${base}KeyPassphrase`];
-      let paths = [...new Set([...(w?.passphrasePaths ?? []).filter((p) => !/PreSharedKey\.1\.PreSharedKey$/.test(p)),
+      // Leaf vendor (X_*Password/_PSK…) hanya ditulis bila isinya memang
+      // sandi — namanya bisa mirip leaf mode/flag.
+      const vals = new Map(db.getParams(deviceId, base).map((p) => [p.path, p.value]));
+      let paths = [...new Set([...(w?.passphrasePaths ?? []).filter((p) => !/PreSharedKey\.1\.PreSharedKey$/.test(p)
+        && (!/\.X_[^.]+$/.test(p) || isPassphraseValue(vals.get(p)))),
         ...cands.filter((c) => existsLike(k, c))])].filter((p) => !k.invalid.has(p));
       if (!paths.length && familyOf(k) === 'huawei' && existsLike(k, `${base}PreSharedKey.1.PreSharedKey`)) {
         paths = [`${base}PreSharedKey.1.PreSharedKey`];
@@ -486,8 +493,10 @@ function applyWanAdd(ctx: CwmpContext, db: Database, deviceId: string, k: Knowle
   if (existing && !req.connectionType && existing.connectionType && existing.connectionType !== 'Unconfigured'
     && /Bridged/i.test(existing.connectionType) === bridge) connectionType = null;
 
+  const service = str(req.serviceName || existing?.serviceList || 'INTERNET', 64);
+  const nat = typeof req.nat === 'boolean' ? req.nat : natDefault(service);
   const std = planStandard(e, connBase, {
-    kind, connectionType, bridge,
+    kind, connectionType, bridge, nat,
     name: req.name ? str(req.name, 32) : existing ? undefined : (kind === 'ppp' ? 'INTERNET' : 'WAN_IP'),
     username: req.username !== undefined ? str(req.username, 128) : undefined,
     password: req.password !== undefined ? str(req.password, 128) : undefined,
@@ -507,10 +516,22 @@ function applyWanAdd(ctx: CwmpContext, db: Database, deviceId: string, k: Knowle
     linkVendor.push(...pv.link);
   }
   if (!bridge || req.serviceName) {
-    const sv = vendorService(e, connBase, str(req.serviceName || 'INTERNET', 64));
+    const sv = vendorService(e, connBase, service);
     if (sv.fill) { connVendor.push(sv.fill); if (sv.guessed) rep.guessed.push(sv.fill.name); }
   }
-  const bind = planBinding(e, connBase, ports(req.bindLan, 4), ports(req.bindSsid, 8));
+  // Binding: pilihan operator; bila tidak ada pilihan dan vendor wajib
+  // binding (FiberHome), WAN internet di-binding ke semua LAN + SSID —
+  // tanpa itu klien tidak dapat internet walau PPPoE Connected.
+  const caps = wanCapabilities(ctx, db, deviceId, k);
+  let bindLan = ports(req.bindLan, 8);
+  let bindSsid = ports(req.bindSsid, 8);
+  const chosen = Array.isArray(req.bindLan) || Array.isArray(req.bindSsid);
+  const hasBinding = !!existing?.binding && (existing.binding.lan.length + existing.binding.ssid.length) > 0;
+  if (!chosen && caps.bindingRequired && !hasBinding && /INTERNET/i.test(service)) {
+    bindLan = caps.lanPorts; bindSsid = caps.ssids.map((s) => s.index);
+    rep.plan.push(`Binding otomatis (${caps.family} wajib binding): LAN ${bindLan.join(',')} · SSID ${bindSsid.join(',')}`);
+  }
+  const bind = planBinding(e, connBase, bindLan, bindSsid);
   if (bind.note) rep.skipped.push(bind.note);
   if (bind.guessed && bind.fills.length) rep.guessed.push(bind.fills[0]!.name.replace(/\d+Enable$/, 'NEnable'));
   connVendor.push(...bind.fills);
@@ -571,6 +592,50 @@ function applyWanAdd(ctx: CwmpContext, db: Database, deviceId: string, k: Knowle
   );
 }
 
+function applyWanBind(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
+  const conn = typeof req.target === 'string' ? k.wan.find((c) => c.base === req.target) : undefined;
+  if (!conn) { rep.skipped.push('Koneksi tidak ditemukan di perangkat'); return; }
+  const lan = ports(req.bindLan, 8);
+  const ssid = ports(req.bindSsid, 8);
+  const bind = planBinding(evidence(k), conn.base, lan, ssid);
+  if (bind.note) { rep.skipped.push(bind.note); return; }
+  if (!bind.fills.length) {
+    // Kosongkan binding (daftar objek "") — hanya untuk vendor berbasis daftar.
+    if (conn.bindingPath && /LanInterface$/.test(conn.bindingPath)) {
+      queueWrite(ctx, db, deviceId, rep, [{ name: conn.bindingPath, type: 'xsd:string', value: '' }], `Lepas binding ${conn.name ?? conn.base}`, 'cfg_bind');
+    } else rep.skipped.push('Pilih minimal satu port LAN/SSID');
+    return;
+  }
+  if (bind.guessed) rep.guessed.push(bind.fills[0]!.name.replace(/\d+Enable$/, 'NEnable'));
+  queueWrite(ctx, db, deviceId, rep, prefixed(conn.base, bind.fills),
+    `Binding ${conn.name ?? conn.base}: LAN ${lan.join(',') || '-'} · SSID ${ssid.join(',') || '-'}`, 'cfg_bind');
+}
+
+/** Kemampuan WAN perangkat untuk UI: keluarga, binding wajib, port LAN, SSID. */
+export interface WanCapabilities {
+  family: Family;
+  bindingRequired: boolean;
+  /** Nama parameter binding yang dipakai (mis. X_FH_LanInterface, X_HW_LANBIND). */
+  bindingParam: string | null;
+  lanPorts: number[];
+  ssids: { index: number; band: string | null; ssid: string | null }[];
+}
+
+export function wanCapabilities(ctx: CwmpContext, db: Database, deviceId: string, kIn?: Knowledge): WanCapabilities {
+  const k = kIn ?? knowledge(ctx, db, deviceId);
+  const family = familyOf(k);
+  const nLan = Number(k.values.get('InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceNumberOfEntries'));
+  const lanPorts = Array.from({ length: Number.isInteger(nLan) && nLan >= 1 && nLan <= 8 ? nLan : 4 }, (_, i) => i + 1);
+  const wl = extractWlan(db.getParams(deviceId), k.model).filter((w) => w.index <= 8);
+  const ssids = wl.length
+    ? wl.map((w) => ({ index: w.index, band: w.band, ssid: w.ssid }))
+    : [1, 2, 3, 4].map((index) => ({ index, band: null, ssid: null }));
+  const sample = k.wan.find((c) => c.bindingPath)?.bindingPath ?? null;
+  const bindingParam = sample ? (sample.endsWith('X_HW_LANBIND.') ? 'X_HW_LANBIND' : sample.split('.').pop()!)
+    : family === 'huawei' ? 'X_HW_LANBIND' : ({ zte: 'X_ZTE-COM_LanInterface', fiberhome: 'X_FH_LanInterface', cmcc: 'X_CMCC_LanInterface', ct: 'X_CT-COM_LanInterface', cu: 'X_CU_LanInterface', nokia: null } as Record<string, string | null>)[family] ?? null;
+  return { family, bindingRequired: bindingRequired(family), bindingParam, lanPorts, ssids };
+}
+
 function applyWanEnable(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
   const conn = typeof req.target === 'string' ? k.wan.find((c) => c.base === req.target) : undefined;
   if (!conn) { rep.skipped.push('Koneksi tidak ditemukan di perangkat'); return; }
@@ -623,6 +688,7 @@ export function applyConfig(
     case 'wan-ip-add': applyWanAdd(ctx, db, deviceId, k, req, rep); break;
     case 'wan-delete': applyWanDelete(ctx, db, deviceId, k, req, rep); break;
     case 'wan-enable': applyWanEnable(ctx, db, deviceId, k, req, rep); break;
+    case 'wan-bind': applyWanBind(ctx, db, deviceId, k, req, rep); break;
     case 'inform-interval': applyInformInterval(ctx, db, deviceId, k, req, rep); break;
     default: rep.skipped.push(`jenis konfigurasi tidak dikenal: ${String(req.type)}`);
   }

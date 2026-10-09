@@ -15,348 +15,269 @@
  */
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Shell from '@/components/Shell';
-import { api, type CatalogSummary, type CatalogModel, type CatalogParam } from '@/lib/api';
-
-type Tab = 'search' | 'tr098' | 'tr181' | 'models';
+import { api, type CatalogSummary, type CatalogParam } from '@/lib/api';
 
 const GROUP_LABEL: Record<string, string> = {
-  device_info: 'Device Info', wan: 'WAN', lan: 'LAN', wifi: 'Wi-Fi',
-  pppoe: 'PPPoE', optical: 'Optical / PON', voip: 'VoIP', system: 'Sistem',
-  security: 'Keamanan', diagnostic: 'Diagnostik', other: 'Lainnya',
+  device_info: 'Device Info', wan: 'WAN', lan: 'LAN', wifi: 'Wi-Fi', wlan: 'WLAN', ssid: 'SSID',
+  pppoe: 'PPPoE', ppp: 'PPP', optical: 'Optik / PON', pon: 'PON', voip: 'VoIP', system: 'Sistem',
+  security: 'Keamanan', diagnostic: 'Diagnostik', other: 'Lainnya', nat: 'NAT', vlan: 'VLAN',
+  management_server: 'Management Server', time: 'Waktu', dns: 'DNS', ip: 'IP', service: 'Layanan',
+  ethernet: 'Ethernet', qos: 'QoS', tr069: 'TR-069', download: 'Download', dhcp: 'DHCP',
+  layer3_forwarding: 'Routing', firewall: 'Firewall', port_mapping: 'Port Mapping',
 };
+const groupLabel = (g: string): string =>
+  GROUP_LABEL[g] ?? g.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function CatalogPage() {
   return <Shell><CatalogBody /></Shell>;
 }
 
+/** Satu baris katalog: path unik + model yang mendukungnya. */
+type Row = CatalogParam & { models: string[]; std: string | null };
+
+/** Sumber yang dipilih di panel kiri. */
+type Source = { kind: 'all' } | { kind: 'std'; dm: 'TR-098' | 'TR-181' } | { kind: 'model'; id: string };
+
+const PAGE = 50;
+
 function CatalogBody() {
   const [cat, setCat] = useState<CatalogSummary | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('search');
+  const [src, setSrc] = useState<Source>({ kind: 'all' });
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<{
-    path: string; label: string; type: string; source: string; model?: string;
-  }[]>([]);
-  const [modelDetail, setModelDetail] = useState<CatalogModel | null>(null);
+  const [group, setGroup] = useState('');
+  const [vendorOnly, setVendorOnly] = useState(false);
+  const [page, setPage] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
 
   const reload = () => {
-    api<CatalogSummary>('/api/catalog')
-      .then(setCat)
-      .catch((e) => setErr((e as Error).message));
+    api<CatalogSummary>('/api/catalog').then(setCat).catch((e) => setErr((e as Error).message));
   };
+  useEffect(reload, []);
 
-  useEffect(() => {
-    reload();
-  }, []);
-
-  useEffect(() => {
-    if (!q.trim()) { setResults([]); return; }
-    const t = setTimeout(() => {
-      api<{ items: typeof results }>(`/api/catalog/search?q=${encodeURIComponent(q)}`)
-        .then((r) => setResults(r.items))
-        .catch(() => setResults([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [q]);
-
-  const std098 = cat?.standard?.['TR-098'] ?? [];
-  const std181 = cat?.standard?.['TR-181'] ?? [];
-
-  /* Kumpulan lengkap, sudah dedupe.
-     Path yang sama sering muncul di daftar standard DAN di beberapa model
-     (mis. InternetGatewayDevice.DeviceInfo.SoftwareVersion ada di TR-098,
-     TR-181, dan hampir tiap model). Menumpuknya mentah membuat tabel penuh
-     baris kembar, jadi kunci berdasarkan path: entri pertama menang, lalu
-     model berikutnya disimpan sebagai atribut sehingga pengguna tetap tahu
-     perangkat mana yang mendukung path itu. */
-  const merged = (() => {
-    const byPath = new Map<string, CatalogParam & { models: string[] }>();
-    const put = (p: CatalogParam, model?: string) => {
-      const cur = byPath.get(p.path);
+  /* Path yang sama muncul di standar DAN di banyak model; satu baris per
+     path, model pendukung disimpan sebagai atribut (kolom Dukungan). */
+  const rows = useMemo<Row[]>(() => {
+    if (!cat) return [];
+    const by = new Map<string, Row>();
+    const put = (p: CatalogParam, model: string | null, std: string | null) => {
+      const cur = by.get(p.path);
       if (cur) {
         if (model && !cur.models.includes(model)) cur.models.push(model);
+        if (std && !cur.std) cur.std = std;
         return;
       }
-      byPath.set(p.path, { ...p, models: model ? [model] : [] });
+      by.set(p.path, { ...p, vendorExt: p.vendorExt ?? /\.X_[^.]+/.test(p.path), models: model ? [model] : [], std });
     };
-    for (const p of std098) put(p);
-    for (const p of std181) put(p);
-    for (const m of cat?.models ?? []) for (const p of m.params ?? []) put(p, m.id);
-    return [...byPath.values()];
-  })();
+    for (const p of cat.standard?.['TR-098'] ?? []) put(p, null, 'TR-098');
+    for (const p of cat.standard?.['TR-181'] ?? []) put(p, null, 'TR-181');
+    for (const m of cat.models) for (const p of m.params ?? []) put(p as CatalogParam, m.id, null);
+    return [...by.values()];
+  }, [cat]);
 
-  // Semua param vendor (per model), disatukan untuk tampilan "kumpulan lengkap".
-  const vendorAll = (cat?.models ?? []).flatMap((m) =>
-    (m.params ?? []).map((p) => ({ ...p, model: m.id })),
-  );
-  const vendorCount = vendorAll.length;
+  const modelName = useMemo(() => new Map((cat?.models ?? []).map((m) => [m.id, m.productClass])), [cat]);
+
+  // Baris sesuai sumber terpilih (sebelum filter teks/grup).
+  const scoped = useMemo(() => rows.filter((r) => {
+    if (src.kind === 'std') return r.std === src.dm;
+    if (src.kind === 'model') return r.models.includes(src.id);
+    return true;
+  }), [rows, src]);
+
+  const groups = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of scoped) m.set(r.group || 'other', (m.get(r.group || 'other') ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [scoped]);
+
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return scoped.filter((r) => (!group || (r.group || 'other') === group)
+      && (!vendorOnly || r.vendorExt)
+      && (!t || r.path.toLowerCase().includes(t) || r.label.toLowerCase().includes(t)));
+  }, [scoped, q, group, vendorOnly]);
+
+  useEffect(() => setPage(0), [src, q, group, vendorOnly]);
+  useEffect(() => { if (group && !groups.some(([g]) => g === group)) setGroup(''); }, [groups, group]);
 
   if (err) return <div className="alert alert-danger">Katalog gagal dimuat: {err}</div>;
   if (!cat) return <div className="text-muted py-4">Memuat…</div>;
 
-  if (modelDetail) {
-    return (
-      <>
-        <button className="btn btn-sm btn-outline-secondary mb-3"
-          onClick={() => setModelDetail(null)}>
-          ← Kembali ke katalog
-        </button>
-        <ModelDetail model={modelDetail} />
-      </>
-    );
-  }
+  const model = src.kind === 'model' ? cat.models.find((m) => m.id === src.id) ?? null : null;
+  const srcKey = src.kind === 'all' ? 'all' : src.kind === 'std' ? `std:${src.dm}` : `model:${src.id}`;
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE));
+  const slice = shown.slice(page * PAGE, page * PAGE + PAGE);
+  const sources: { key: string; label: string; sub: string; n: number; src: Source }[] = [
+    { key: 'all', label: 'Semua parameter', sub: 'standar + vendor', n: rows.length, src: { kind: 'all' } },
+    { key: 'std:TR-098', label: 'Standar TR-098', sub: 'InternetGatewayDevice.', n: rows.filter((r) => r.std === 'TR-098').length, src: { kind: 'std', dm: 'TR-098' } },
+    { key: 'std:TR-181', label: 'Standar TR-181', sub: 'Device.', n: rows.filter((r) => r.std === 'TR-181').length, src: { kind: 'std', dm: 'TR-181' } },
+  ];
+  const models = [...cat.models].sort((a, b) => a.vendor.localeCompare(b.vendor) || a.productClass.localeCompare(b.productClass));
 
   return (
     <>
       <div className="page-head">
         <div>
           <h1>Katalog Parameter</h1>
-          <p className="text-muted small mb-0">v{cat.version} · {cat.generatedAt}</p>
+          <p>{rows.length} path unik · {cat.counts.models} model · katalog v{cat.version} ({cat.generatedAt})</p>
         </div>
-        <div className="d-flex flex-wrap align-items-center gap-2">
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => document.getElementById('file-upload')?.click()}>
-            <i className="fa-solid fa-upload me-1" />Impor
-          </button>
-        </div>
+        <button className="btn btn-outline-secondary btn-sm" onClick={() => setImportOpen(true)}>
+          <i className="fa-solid fa-upload me-1" />Impor katalog
+        </button>
       </div>
 
-      {/* Statistik — kartu tertata seperti webhook */}
-      <div className="d-flex flex-wrap gap-3 mb-3">
-        <div className="flex-fill" style={{ minWidth: '140px' }}>
-          <div className="card mb-0 stat-card"><div className="card-body py-3 d-flex align-items-center gap-3">
-            <div className="stat-icon bg-primary-soft"><i className="fa-solid fa-layer-group" /></div>
-            <div>
-              <div className="stat-label">TR-098</div>
-              <div className="stat-value">{cat.counts.tr098}</div>
+      <div className="row g-3">
+        {/* Sumber: standar & model */}
+        <div className="col-lg-3">
+          <select className="form-select form-select-sm d-lg-none" value={srcKey}
+            onChange={(e) => setSrc([...sources, ...models.map((m) => ({ key: `model:${m.id}`, src: { kind: 'model', id: m.id } as Source }))]
+              .find((x) => x.key === e.target.value)!.src)}>
+            {sources.map((x) => <option key={x.key} value={x.key}>{x.label} ({x.n})</option>)}
+            {models.map((m) => <option key={m.id} value={`model:${m.id}`}>{m.vendor} {m.productClass || m.id} ({m.paramCount})</option>)}
+          </select>
+          <div className="card catalog-sources d-none d-lg-block">
+            <div className="card-header">Sumber</div>
+            <div className="list-group list-group-flush">
+              {sources.map((x) => (
+                <button key={x.key} type="button" onClick={() => setSrc(x.src)}
+                  className={`list-group-item list-group-item-action ${srcKey === x.key ? 'active' : ''}`}>
+                  <span className="d-flex justify-content-between align-items-center gap-2">
+                    <span className="fw-semibold">{x.label}</span><span className="num small">{x.n}</span>
+                  </span>
+                  <span className="d-block small sub">{x.sub}</span>
+                </button>
+              ))}
+              <div className="list-group-item catalog-sources-label">Model ({models.length})</div>
+              {models.map((m) => (
+                <button key={m.id} type="button" onClick={() => setSrc({ kind: 'model', id: m.id })}
+                  className={`list-group-item list-group-item-action ${srcKey === `model:${m.id}` ? 'active' : ''}`}>
+                  <span className="d-flex justify-content-between align-items-center gap-2">
+                    <span className="fw-semibold text-truncate">{m.productClass || m.id}</span><span className="num small">{m.paramCount}</span>
+                  </span>
+                  <span className="d-block small sub">{m.vendor} · {m.dataModel}</span>
+                </button>
+              ))}
             </div>
-          </div></div>
+          </div>
         </div>
-        <div className="flex-fill" style={{ minWidth: '140px' }}>
-          <div className="card mb-0 stat-card"><div className="card-body py-3 d-flex align-items-center gap-3">
-            <div className="stat-icon bg-info-soft"><i className="fa-solid fa-diagram-project" /></div>
-            <div>
-              <div className="stat-label">TR-181</div>
-              <div className="stat-value">{cat.counts.tr181}</div>
+
+        {/* Daftar parameter */}
+        <div className="col-lg-9">
+          <div className="card">
+            <div className="card-header">
+              <span>{model ? `${model.vendor} ${model.productClass || model.id}` : sources.find((x) => x.key === srcKey)?.label}</span>
+              <span className="h-sub">{shown.length === scoped.length ? `${scoped.length} path` : `${shown.length} dari ${scoped.length} path`}</span>
+              {model && <span className="badge text-bg-light border ms-auto">{model.dataModel}</span>}
             </div>
-          </div></div>
-        </div>
-        <div className="flex-fill" style={{ minWidth: '140px' }}>
-          <div className="card mb-0 stat-card"><div className="card-body py-3 d-flex align-items-center gap-3">
-            <div className="stat-icon bg-success-soft"><i className="fa-solid fa-server" /></div>
-            <div>
-              <div className="stat-label">Model</div>
-              <div className="stat-value">{cat.counts.models}</div>
-            </div>
-          </div></div>
-        </div>
-        <div className="flex-fill" style={{ minWidth: '140px' }}>
-          <div className="card mb-0 stat-card"><div className="card-body py-3 d-flex align-items-center gap-3">
-            <div className="stat-icon bg-warning-soft"><i className="fa-solid fa-microchip" /></div>
-            <div>
-              <div className="stat-label">Param Vendor</div>
-              <div className="stat-value">{cat.counts.params}</div>
-            </div>
-          </div></div>
-        </div>
-      </div>
-
-      <div className="alert alert-info small py-2">
-        Katalog ini perkiraan berdasarkan riset. Vendor boleh menambah node sendiri
-        (<code>X_ZTE-COM_*</code>, <code>X_HW_*</code>, <code>X_CT-COM_*</code>, dst).
-        Untuk kebenaran pasti atas suatu perangkat, jalankan
-        <b> Petakan struktur</b> di halaman perangkat — jalurnya dibaca langsung dari perangkat.
-      </div>
-
-      <ul className="nav nav-tabs nav-tabs-scroll mb-3">
-        {([
-          ['search', 'Pencarian'],
-          ['tr098', `TR-098 (${std098.length})`],
-          ['tr181', `TR-181 (${std181.length})`],
-          ['models', `Per Model (${cat.models.length})`],
-        ] as [Tab, string][]).map(([k, label]) => (
-          <li className="nav-item" key={k}>
-            <button className={`nav-link ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>
-              {label}
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      {tab === 'search' && (
-        <>
-          <input
-            type="search" className="form-control mb-3"
-            placeholder="Cari path atau label — mis. SSID, optical, VLAN, PPPoE…"
-            value={q} onChange={(e) => setQ(e.target.value)}
-          />
-          {q && results.length === 0 && (
-            <p className="text-muted">Tidak ada hasil untuk “{q}”.</p>
-          )}
-
-          {q ? (
-            <ParamTable
-              items={results.map((r) => ({
-                path: r.path, label: r.label, type: r.type,
-                access: '', group: '', source: r.source,
-              }))}
-              showModel
-              modelOf={(i) => results.find((r) => r.path === i.path)?.model}
-            />
-          ) : (
-            /* Kueri kosong: tampilkan SEMUA parameter (standard + vendor)
-               sebagai satu kumpulan lengkap. Sebelumnya tabel dibiarkan
-               kosong tanpa pesan sehingga terlihat seperti rusak. */
-            <>
-              <p className="text-muted small mb-2">
-                Menampilkan seluruh kumpulan parameter — {merged.length} path unik
-                (dari {std098.length + std181.length + vendorCount} entri, path kembar
-                digabung). Kolom Model menandai perangkat mana yang mendukungnya.
-                Ketik untuk menyaring.
-              </p>
-              <ParamTable
-                items={merged}
-                showModel
-                modelOf={(i) => {
-                  const models = (i as CatalogParam & { models?: string[] }).models;
-                  if (models?.length) return models.join(', ');
-                  // Path standard tanpa model: jangan biarkan sel kosong
-                  // tanpa keterangan, pengguna perlu tahu itu berasal dari
-                  // spesifikasi, bukan dari daftar perangkat tertentu.
-                  return i.source || 'Standard';
-                }}
-              />
-            </>
-          )}
-        </>
-      )}
-
-      {tab === 'tr098' && <ParamTable items={std098} grouped />}
-      {tab === 'tr181' && <ParamTable items={std181} grouped />}
-
-      {tab === 'models' && (
-        <div className="row">
-          {cat.models.map((m) => (
-            <div className="col-md-6 col-xl-4 mb-3" key={m.id}>
-              <div className="card h-100">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <div>
-                      <h5 className="mb-1">{m.productClass}</h5>
-                      <div className="text-muted small">{m.vendor} · {m.dataModel}</div>
-                    </div>
-                    <span className="badge bg-light text-dark border">{m.paramCount} param</span>
-                  </div>
-                  {m.notes && <p className="small text-muted mt-2 mb-2">{m.notes}</p>}
-                  <button className="btn btn-sm btn-outline-primary"
-                    onClick={async () =>
-                      setModelDetail(await api<CatalogModel>(`/api/catalog/models/${m.id}`))}>
-                    Lihat parameter
-                  </button>
+            <div className="card-body py-3">
+              {model?.notes && <p className="small text-muted mb-3">{model.notes}</p>}
+              <div className="d-flex flex-wrap gap-2 align-items-center">
+                <input type="search" className="form-control form-control-sm flex-grow-1" style={{ minWidth: 220, maxWidth: 420 }}
+                  placeholder="Cari path atau label — SSID, RXPower, VLAN…" value={q} onChange={(e) => setQ(e.target.value)} />
+                <select className="form-select form-select-sm" style={{ width: 'auto' }} value={group}
+                  onChange={(e) => setGroup(e.target.value)} aria-label="Grup parameter">
+                  <option value="">Semua grup ({scoped.length})</option>
+                  {groups.map(([g, n]) => <option key={g} value={g}>{groupLabel(g)} ({n})</option>)}
+                </select>
+                <div className="form-check form-switch mb-0">
+                  <input className="form-check-input" type="checkbox" id="cat-vendor" checked={vendorOnly}
+                    onChange={(e) => setVendorOnly(e.target.checked)} />
+                  <label className="form-check-label small" htmlFor="cat-vendor">Hanya ekstensi vendor (X_…)</label>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-      {importOpen && <ImportModal onClose={() => setImportOpen(false)} onDone={reload} />}
-    </>
-  );
-}
-
-function ModelDetail({ model }: { model: CatalogModel }) {
-  return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-title mb-1">{model.productClass}</h3>
-        <div className="text-muted small">
-          {model.vendor} · {model.dataModel} · {model.params.length} parameter vendor
-        </div>
-      </div>
-      <div className="card-body">
-        {model.notes && <p className="small">{model.notes}</p>}
-        <ParamTable items={model.params} grouped />
-      </div>
-    </div>
-  );
-}
-
-function ParamTable({ items, grouped, showModel, modelOf }: {
-  items: CatalogParam[];
-  grouped?: boolean;
-  showModel?: boolean;
-  modelOf?: (i: CatalogParam) => string | undefined;
-}) {
-  const groups = useMemo(() => {
-    if (!grouped) return null;
-    const m = new Map<string, CatalogParam[]>();
-    for (const p of items) {
-      const g = p.group || 'other';
-      const list = m.get(g) ?? [];
-      list.push(p);
-      m.set(g, list);
-    }
-    return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
-  }, [items, grouped]);
-
-  if (!items.length) return null;
-
-  if (groups) {
-    return (
-      <div className="vstack gap-3">
-        {groups.map(([g, list]) => (
-          <div key={g} className="card">
-            <div className="card-header py-2">
-              <h4 className="h6 mb-0">
-                {GROUP_LABEL[g] ?? g}
-                <span className="text-muted ms-2 fw-normal">{list.length}</span>
-              </h4>
-            </div>
-            <div className="card-body p-0 table-responsive">
-              <table className="table table-sm table-param mb-0">
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0 table-catalog">
                 <thead className="table-light">
-                  <tr><th>Path</th><th>Label</th><th style={{ width: 130 }}>Tipe</th><th style={{ width: 90 }}>Akses</th></tr>
+                  <tr>
+                    <th>Parameter</th>
+                    <th style={{ width: 90 }}>Tipe</th>
+                    <th style={{ width: 70 }}>Akses</th>
+                    {src.kind !== 'model' && <th style={{ width: 120 }}>Dukungan</th>}
+                  </tr>
                 </thead>
                 <tbody>
-                  {list.map((p) => (
-                    <tr key={p.path} className={p.vendorExt ? 'param-vendorext' : ''}>
-                      <td className="param-path">{p.path}</td>
-                      <td className="small">{p.label}</td>
-                      <td className="small text-muted">{p.type.replace('xsd:', '')}</td>
-                      <td className="small">{p.access}</td>
+                  {slice.length === 0 && (
+                    <tr><td colSpan={4} className="text-center text-muted py-4">
+                      {q ? <>Tidak ada parameter yang cocok dengan “{q}”.</> : 'Tidak ada parameter di sumber ini.'}
+                    </td></tr>
+                  )}
+                  {slice.map((r) => (
+                    <tr key={r.path}>
+                      <td>
+                        <PathCell path={r.path} vendorExt={!!r.vendorExt} />
+                        <div className="small text-muted">{r.label}{r.unit ? ` (${r.unit})` : ''}</div>
+                      </td>
+                      <td><span className="badge text-bg-light border fw-normal">{(r.type || '').replace('xsd:', '') || '—'}</span></td>
+                      <td><AccessBadge access={r.access} /></td>
+                      {src.kind !== 'model' && (
+                        <td className="small">
+                          {r.std && <span className="badge text-bg-light border fw-normal me-1">{r.std}</span>}
+                          {r.models.length > 0 && (
+                            <span className="badge text-bg-primary fw-normal" title={r.models.map((m) => modelName.get(m) ?? m).join(', ')}>
+                              {r.models.length} model
+                            </span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {shown.length > PAGE && (
+              <div className="card-footer d-flex align-items-center gap-2 small">
+                <span className="text-muted">{page * PAGE + 1}–{Math.min(shown.length, (page + 1) * PAGE)} dari {shown.length}</span>
+                <div className="btn-group btn-group-sm ms-auto">
+                  <button className="btn btn-outline-secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                    <i className="fa-solid fa-chevron-left" />
+                  </button>
+                  <button className="btn btn-outline-secondary" disabled>{page + 1} / {pages}</button>
+                  <button className="btn btn-outline-secondary" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
+                    <i className="fa-solid fa-chevron-right" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        ))}
+          <p className="small text-muted mt-2 mb-0">
+            Katalog ini rujukan, bukan jaminan: vendor bebas menambah node sendiri (<code>X_ZTE-COM_*</code>, <code>X_HW_*</code>,
+            <code> X_FH_*</code>…). Struktur pasti suatu ONU ada di tab <b>Dipelajari</b> halaman perangkat (tombol <b>Pelajari struktur</b>).
+          </p>
+        </div>
       </div>
-    );
-  }
+      {importOpen && <ImportModal onClose={() => setImportOpen(false)} onDone={reload} />}
+    </>
+  );
+}
 
+/** Path dengan induk diredam dan nama leaf ditebalkan; tombol salin. */
+function PathCell({ path, vendorExt }: { path: string; vendorExt: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const i = path.lastIndexOf('.', path.length - 2);
+  const parent = path.slice(0, i + 1);
+  const leaf = path.slice(i + 1);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(path); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* izin ditolak */ }
+  };
   return (
-    <div className="table-responsive">
-      <table className="table table-sm table-param">
-        <thead className="table-light">
-          <tr>
-            <th>Path</th><th>Label</th><th style={{ width: 130 }}>Tipe</th>
-            {showModel && <th style={{ width: 130 }}>Model</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((p, i) => (
-            <tr key={`${p.path}-${i}`} className={p.vendorExt ? 'param-vendorext' : ''}>
-              <td className="param-path">{p.path}</td>
-              <td className="small">{p.label}</td>
-              <td className="small text-muted">{p.type.replace('xsd:', '')}</td>
-              {showModel && <td className="small">{modelOf?.(p) ?? p.source}</td>}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="catalog-path">
+      {/* <wbr> setelah tiap titik: path panjang patah di batas segmen, bukan di tengah kata. */}
+      <span className="pfx">{parent.split('.').filter(Boolean).map((seg, k) => <span key={k}>{seg}.<wbr /></span>)}</span>
+      <span className="leaf">{leaf}</span>
+      {vendorExt && <span className="badge text-bg-warning ms-1 align-middle">vendor</span>}
+      <button type="button" className="btn btn-link btn-sm p-0 ms-1 copy" title="Salin path" onClick={() => void copy()}>
+        <i className={`fa-solid ${copied ? 'fa-check text-success' : 'fa-copy'}`} />
+      </button>
     </div>
   );
+}
+
+function AccessBadge({ access }: { access: string }) {
+  const a = (access || '').toUpperCase();
+  if (!a) return <span className="text-muted">—</span>;
+  const rw = /W/.test(a);
+  return <span className={`badge fw-normal ${rw ? 'text-bg-success' : 'text-bg-light border'}`} title={rw ? 'Bisa dibaca & ditulis' : 'Hanya baca'}>{rw ? 'RW' : 'R'}</span>;
 }
 
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {

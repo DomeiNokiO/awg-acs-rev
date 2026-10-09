@@ -414,7 +414,8 @@ Ubah/Hapus) dan semua SSID (tombol Ubah). Tab **Konfigurasi**:
 | WAN PPPoE — isi slot OLT (mis. `WCD 2 · #1 · PPPoE_Routed`) | `{"type":"wan-add","placement":"existing","target":"<path koneksi>","username":"…","password":"…","vlanId":100}` | `Enable=false` → SPV standar → SPV vendor → `Enable=true` |
 | WAN di WCD yang ada | `{"type":"wan-add","placement":"wcd","wcd":3,…}` | `AddObject` WANPPPConnection di WCD 3 → isi |
 | WAN IPoE (DHCP/Static/bridge) | `{"type":"wan-ip-add","placement":"new","staticIp":"…","netmask":"…","gateway":"…","dns":"…"}` | sama, WANIPConnection |
-| Binding port, ConnectionType, bertahap | `"bindLan":[1,2],"bindSsid":[1],"connectionType":"PPPoE_Routed","sequential":true` | `X_HW_LANBIND` / `X_*_LanInterface`; nilai ConnectionType otomatis mengikuti ONU |
+| Binding port, NAT, ConnectionType, bertahap | `"bindLan":[1,2],"bindSsid":[1],"nat":true,"connectionType":"PPPoE_Routed","sequential":true` | `X_HW_LANBIND` / `X_*_LanInterface`; **FiberHome otomatis semua LAN + SSID** (wajib, `X_FH_LanInterface`); NAT default aktif untuk INTERNET, mati untuk TR069/VOIP |
+| Binding koneksi yang ada | `{"type":"wan-bind","target":…,"bindLan":[1,2,3,4],"bindSsid":[1]}` | SPV binding; WAN FiberHome tanpa binding ditandai di tabel WAN |
 | Hapus / aktif-nonaktif WAN | `{"type":"wan-delete","target":…}` / `{"type":"wan-enable","target":…,"enable":false}` | `DeleteObject` / SPV `Enable` |
 | Interval Inform | `{"type":"inform-interval","informInterval":600}` | SPV `ManagementServer.PeriodicInformInterval` |
 | Reboot / reset pabrik | `POST /reboot` / `POST /factory-reset {"confirm":"<serial>"}` (admin) | `Reboot` / `FactoryReset` |

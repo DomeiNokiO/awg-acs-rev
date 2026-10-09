@@ -223,7 +223,7 @@ tidak ada yang diantrekan → HTTP 400 dengan `error` berisi alasannya.
 |----------|--------------------|-----------------------|-------------|--------------|
 | Huawei | `X_HW_VLAN` | – | `X_HW_SERVICELIST` | `X_HW_LANBIND.Lan{1-4}Enable`, `SSID{1-8}Enable` |
 | ZTE | `X_ZTE-COM_VLANEnable=true` + `X_ZTE-COM_VLANID` | `X_ZTE-COM_WANPONLinkConfig.VLANID` | `X_ZTE-COM_ServiceList` | `X_ZTE-COM_LanInterface` |
-| FiberHome | `X_FH_VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | – |
+| FiberHome | `X_FH_VLANID` / `VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | `X_FH_LanInterface` — **wajib** |
 | CMCC | `X_CMCC_VLANMode=2` + `X_CMCC_VLANIDMark` | `X_CMCC_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` |
 | CT-COM | `X_CT-COM_VLANMode=2` + `X_CT-COM_VLANIDMark` | `X_CT-COM_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CT-COM_ServiceList` | `X_CT-COM_LanInterface` |
 | CU | – | `X_CU_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CU_ServiceList` | `X_CU_LanInterface` |
@@ -235,6 +235,28 @@ Keluarga ditentukan dari bukti path lalu Manufacturer/OUI; ODM China tanpa
 nama operator diperlakukan sebagai CT-COM. `LanInterface` berisi daftar objek
 `InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.N` /
 `WLANConfiguration.N` dipisah koma.
+
+**Binding wajib FiberHome.** WAN internet FiberHome tanpa
+`X_FH_LanInterface` tidak meneruskan trafik klien LAN/WiFi walau PPPoE
+*Connected*. Bila operator tidak memilih port, WAN internet FiberHome
+otomatis di-binding ke **semua port LAN** (jumlah dari
+`LANDevice.1.LANEthernetInterfaceNumberOfEntries`, default 4) **dan semua
+SSID** yang ada di ONU — sama dengan praktik GenieACS:
+
+```
+…WANPPPConnection.1.X_FH_LanInterface =
+InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1,…LANEthernetInterfaceConfig.4,
+InternetGatewayDevice.LANDevice.1.WLANConfiguration.1,…WLANConfiguration.4
+```
+
+Slot yang sudah punya binding dipertahankan. WAN lama tanpa binding ditandai
+**"belum di-binding"** di tabel Koneksi WAN; tombol 🔗 (atau tab
+**Konfigurasi → Binding**, `{"type":"wan-bind"}`) memperbaikinya. ZTE/Huawei
+meneruskan tanpa binding, jadi di sana binding opsional.
+
+**NAT** (`nat`): `NATEnabled` mengikuti pilihan operator; default **aktif**
+untuk layanan INTERNET dan **mati** untuk TR069/VOIP/IPTV (WAN manajemen
+tidak butuh NAT). Bridge tidak menulis NAT.
 
 Parameter standar TR-098 yang ditulis: `Name`, `ConnectionType`, `Username`,
 `Password`, `NATEnabled`; `TransportType=PPPoE`,
@@ -253,7 +275,9 @@ DHCP/Static (+ `ExternalIPAddress`, `SubnetMask`, `DefaultGateway`, `DNSServers`
 UI (tab **Konfigurasi → WAN Internet**) mendaftar semua pilihan:
 "WANConnectionDevice baru", setiap koneksi yang ada ("Isi (kosong)/(timpa):
 PPPoE · WCD 2 · #1 · PPPoE_Routed · …"), dan setiap WCD. **Default** = slot
-kosong pertama di luar WCD 1 (TR069) bila ada, selain itu WCD baru. Tombol
+kosong pertama di luar WCD 1 (TR069) bila ada → WCD tanpa koneksi yang
+disiapkan OLT (tambah koneksi PPP di WCD itu lalu isi — alur FiberHome) →
+WCD baru. Tombol
 ⚙ di tabel Koneksi WAN (Ringkasan) langsung membuka formulir untuk slot itu.
 
 **ConnectionType** otomatis mengikuti nilai yang sudah dipakai perangkat
@@ -271,6 +295,7 @@ AddObject …WANConnectionDevice.N.WANPPPConnection.                           �
 SPV …N.WANPPPConnection.M.{Name, ConnectionType=PPPoE_Routed, TransportType,
      Username, Password, ConnectionTrigger, NATEnabled}
 SPV …M.X_FH_VLANID          SPV …M.X_FH_ServiceList
+SPV …M.X_FH_LanInterface=<semua LAN + SSID>
 SPV …N.X_FH_WANGponLinkConfig.Mode=2   SPV …N.X_FH_WANGponLinkConfig.VLANID
 SPV …M.Enable=true
 GPN WANDevice.  → WAN baru muncul di UI

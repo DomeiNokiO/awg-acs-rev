@@ -73,14 +73,28 @@ kosong/0 dilewati.
 
 | Vendor | VLAN koneksi | VLAN link (WCD) | ServiceList | Binding port | ConnectionType | Bukti |
 |--------|--------------|-----------------|-------------|--------------|----------------|-------|
-| FiberHome HG6145D2 | `VLANID` (standar) | – | `X_FH_ServiceList` | – | `PPPoE_Routed` | **Lapangan** |
-| FiberHome HG6543C RP2872 | `VLANID` (standar) | – | `X_FH_ServiceList` | – | `IP_Routed` | **Lapangan** |
-| FiberHome (lainnya) | `X_FH_VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | – | – | Komunitas⁴ |
+| FiberHome HG6145D2 | `VLANID` (standar) | – | `X_FH_ServiceList` | `X_FH_LanInterface` **wajib** | `PPPoE_Routed` | **Lapangan** |
+| FiberHome HG6543C RP2872 | `VLANID` (standar) | – | `X_FH_ServiceList` | `X_FH_LanInterface` **wajib** | `IP_Routed` | **Lapangan** |
+| FiberHome (lainnya) | `X_FH_VLANID` | `X_FH_WANGponLinkConfig.Mode=2` + `VLANID` | `X_FH_ServiceList` | `X_FH_LanInterface` | – | Komunitas⁴ + pengguna |
 | ZTE F660 firmware suntikan CMCC (V9.0.0P1T7) | `X_CMCC_VLANIDMark` | – | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` (bila ada) | `PPPoE_Routed` | **Lapangan** — diperlakukan sebagai keluarga CMCC |
 | ZTE (termasuk F660 ORI) | `X_ZTE-COM_VLANEnable` + `X_ZTE-COM_VLANID` | `X_ZTE-COM_WANPONLinkConfig.VLANID` | `X_ZTE-COM_ServiceList` | `X_ZTE-COM_LanInterface` | `IP_Routed` | Komunitas⁵ |
 | Huawei | `X_HW_VLAN` (+ `X_HW_PRI`) | – | `X_HW_SERVICELIST` | `X_HW_LANBIND.Lan{1-4}Enable`, `SSID{1-8}Enable` | `IP_Routed` | Komunitas³ ⁶ |
 | CMCC | `X_CMCC_VLANMode=2` + `X_CMCC_VLANIDMark` | `X_CMCC_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CMCC_ServiceList` | `X_CMCC_LanInterface` | `IP_Routed` | Komunitas⁷ |
 | CT-COM | `X_CT-COM_VLANMode=2` + `X_CT-COM_VLANIDMark` | `X_CT-COM_WANGponLinkConfig.Enable/Mode=2/VLANIDMark` | `X_CT-COM_ServiceList` | `X_CT-COM_LanInterface` | `IP_Routed` | Komunitas (halny HL-4GMV) |
+
+**Binding FiberHome (pengguna, 2026-10):** WAN internet FiberHome tanpa
+`X_FH_LanInterface` = tidak ada internet di klien. Nilai yang dipakai di
+GenieACS dan kini default AWG-ACS (semua LAN + semua SSID, dipisah koma,
+tanpa titik akhir):
+
+```
+InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1,InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2,
+InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.3,InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.4,
+InternetGatewayDevice.LANDevice.1.WLANConfiguration.1,InternetGatewayDevice.LANDevice.1.WLANConfiguration.2,
+InternetGatewayDevice.LANDevice.1.WLANConfiguration.3,InternetGatewayDevice.LANDevice.1.WLANConfiguration.4
+```
+
+**NAT:** `NATEnabled=true` untuk WAN INTERNET, `false` untuk WAN TR069/VOIP.
 
 `ConnectionType` WAN baru mengikuti nilai yang sudah dipakai koneksi sejenis
 di ONU itu sendiri (lihat HG6145D2 `PPPoE_Routed` vs HG6543C `IP_Routed` —
@@ -131,6 +145,14 @@ Pasangan yang ditolak ONU dilewati otomatis ke pasangan berikutnya.
 
 Saat ganti sandi, ACS menulis ke **semua** lokasi di atas yang ada di ONU
 tersebut (sebagian firmware punya keduanya).
+
+Lokasi sandi vendor (`X_<vendor>_…Passphrase/Password/WPAKey/PSK`,
+`PreSharedKey.1.X_<vendor>_KeyPassphrase`) juga dibaca; nilainya hanya
+dianggap sandi bila 8–64 karakter dan bukan `true/false` — leaf vendor
+bernama mirip bisa berisi mode/flag. Bagian *Sandi (diagnostik)* di
+`scripts/param-report.mjs` menunjukkan per firmware lokasi sandi mana yang
+terisi / kosong / bintang (nilainya tidak dicetak) dan kandidat lokasi lain
+di struktur ONU.
 
 **Sandi terbuka.** UI menampilkan sandi WiFi & PPPoE apa adanya. TR-098
 mengizinkan ONU mengembalikan string kosong saat sandi dibaca (Huawei

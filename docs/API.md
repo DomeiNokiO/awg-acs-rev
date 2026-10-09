@@ -157,15 +157,22 @@ perangkat; tebakan dilaporkan di `guessed`.
 | `wifi` | `wlanIndex`, `ssid?`, `passphrase?` (≥8), `wifiEnable?`, `hidden?` | SPV SSID/sandi/aktif pada WLANConfiguration.N (TR-181: WiFi.SSID/AccessPoint). `hidden:true` = sembunyikan SSID (`SSIDAdvertisementEnabled=false`, atau `X_*_SSIDHide=true` bila hanya itu yang dilaporkan ONU); WiFi tetap aktif. Contoh aktif tapi tersembunyi: `{"type":"wifi","wlanIndex":1,"wifiEnable":true,"hidden":true}` |
 | `pppoe` | `target?`, `username?`, `password?`, `vlanId?`, `serviceName?` | SPV kredensial; VLAN & ServiceList di SPV terpisah |
 | `vlan` | `target?`, `vlanId` | SPV VLAN (level koneksi `X_HW_VLAN`/`X_ZTE-COM_VLANID`/`X_FH_VLANID` atau level link `X_CT-COM_WANGponLinkConfig.VLANIDMark`) |
-| `wan-add` | `placement` (`new`/`wcd`/`existing`), `target?` (existing), `wcd?` (wcd), `username`, `password`, `vlanId?`, `name?`, `bridge?`, `connectionType?`, `serviceName?`, `bindLan?` [1-4], `bindSsid?` [1-8], `sequential?`, `extra?` | WAN internet PPPoE: WCD baru, di dalam WCD yang ada, atau isi slot yang ada (mis. `WCD 2 · #1 · PPPoE_Routed`); SPV standar → SPV vendor satu per satu → `Enable=true`; struktur WAN dipetakan ulang |
+| `wan-add` | `placement` (`new`/`wcd`/`existing`), `target?` (existing), `wcd?` (wcd), `username`, `password`, `vlanId?`, `name?`, `bridge?`, `connectionType?`, `serviceName?`, `nat?` (default: true untuk INTERNET, false untuk TR069/VOIP), `bindLan?` [1-8], `bindSsid?` [1-8], `sequential?`, `extra?` | WAN internet PPPoE: WCD baru, di dalam WCD yang ada, atau isi slot yang ada (mis. `WCD 2 · #1 · PPPoE_Routed`); SPV standar → SPV vendor satu per satu → `Enable=true`; struktur WAN dipetakan ulang |
 | `wan-ip-add` | sama, plus `staticIp?`, `netmask?`, `gateway?`, `dns?` | WAN internet IPoE (DHCP bila tanpa `staticIp`) atau bridge |
 | `wan-delete` | `target` | DeleteObject koneksi (atau WCD-nya bila satu-satunya koneksi) |
 | `wan-enable` | `target`, `enable` | aktif/nonaktifkan koneksi WAN |
+| `wan-bind` | `target`, `bindLan` [1-8], `bindSsid` [1-8] | binding port koneksi yang ada (`X_FH_LanInterface` / `X_*_LanInterface` daftar objek, `X_HW_LANBIND.*Enable`). Daftar kosong = lepas binding |
 | `inform-interval` | `informInterval` (60–86400 detik) | `PeriodicInformEnable=true` + `PeriodicInformInterval` |
 
-`GET /api/devices/:id` → `insight.wcds[]` (WCD yang ada, termasuk kosong) dan
-`insight.connTypes` (ConnectionType yang dipakai perangkat) untuk menyusun
-pilihan lokasi WAN.
+`GET /api/devices/:id` → `insight.wcds[]` (WCD yang ada, termasuk kosong),
+`insight.connTypes` (ConnectionType yang dipakai perangkat), `insight.wan[].binding`
+(`{lan[], ssid[]}` atau null) dan `wanCaps`
+(`{family, bindingRequired, bindingParam, lanPorts[], ssids[]}`) untuk menyusun
+pilihan lokasi WAN dan binding.
+
+**FiberHome:** `wan-add`/`wan-ip-add` tanpa `bindLan`/`bindSsid` untuk layanan
+INTERNET otomatis di-binding ke semua LAN + SSID (`X_FH_LanInterface`) —
+tanpa binding klien tidak mendapat internet.
 
 Respons: `{queued, plan[], skipped[], guessed[], tasks[], writes[]}`; HTTP 400 + `error` bila tidak ada yang diantrekan.
 

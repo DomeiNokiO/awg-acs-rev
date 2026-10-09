@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  planVlan, planService, planBinding, planStandard, chooseConnectionType, detectFamily, type Evidence, type Family,
+  planVlan, planService, planBinding, planStandard, chooseConnectionType, detectFamily, natDefault, bindingRequired, type Evidence, type Family,
 } from '../src/vendorwan.ts';
 
 const W = 'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.';
@@ -96,4 +96,19 @@ test('detectFamily: F660 ORI vs F660 suntikan CMCC, firmware campuran → bukti 
   assert.equal(detectFamily([`${conn}X_ZTE-COM_VLANID`, `${conn}X_CMCC_ServiceList`], 'ZTE', '001141'), 'zte');
   // Ekstensi di luar area WAN (mis. optik X_CMCC_GponInterfaceConfig) tidak menentukan keluarga WAN.
   assert.equal(detectFamily(['InternetGatewayDevice.WANDevice.1.X_CMCC_GponInterfaceConfig.RXPower'], 'ZTE', '001141'), 'zte');
+});
+
+test('NAT default per layanan & binding wajib FiberHome', () => {
+  assert.equal(natDefault('INTERNET'), true);
+  assert.equal(natDefault('TR069_INTERNET'), true);
+  assert.equal(natDefault('TR069'), false);
+  assert.equal(natDefault('VOIP'), false);
+  assert.equal(natDefault(''), true);
+  assert.equal(bindingRequired('fiberhome'), true);
+  assert.equal(bindingRequired('zte'), false);
+  const plan = planStandard(ev('fiberhome'), conn, { kind: 'ppp', connectionType: 'IP_Routed', bridge: false, nat: false, username: 'u', password: 'p' });
+  assert.equal(plan.find((f) => f.name === 'NATEnabled')?.value, 'false');
+  const bind = planBinding(ev('fiberhome'), conn, [1, 2], [1]);
+  assert.equal(bind.fills[0]!.name, 'X_FH_LanInterface');
+  assert.equal(bind.fills[0]!.value, 'InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1,InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.2,InternetGatewayDevice.LANDevice.1.WLANConfiguration.1');
 });

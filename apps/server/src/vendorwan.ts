@@ -10,7 +10,7 @@
  * |-----------|--------------------------------------------|------------------------------------------------|----------------------|-------------------------|
  * | Huawei    | X_HW_VLAN (+X_HW_PRI)                      | –                                              | X_HW_SERVICELIST     | X_HW_LANBIND.LanN/SSIDN |
  * | ZTE       | X_ZTE-COM_VLANEnable + X_ZTE-COM_VLANID    | X_ZTE-COM_WANPONLinkConfig.VLANID              | X_ZTE-COM_ServiceList| X_ZTE-COM_LanInterface  |
- * | FiberHome | X_FH_VLANID                                | X_FH_WANGponLinkConfig.Mode=2 + VLANID         | X_FH_ServiceList     | –                       |
+ * | FiberHome | X_FH_VLANID / VLANID                       | X_FH_WANGponLinkConfig.Mode=2 + VLANID         | X_FH_ServiceList     | X_FH_LanInterface (WAJIB) |
  * | CMCC      | X_CMCC_VLANMode=2 + X_CMCC_VLANIDMark      | X_CMCC_WANGponLinkConfig.Enable/Mode/VLANIDMark| X_CMCC_ServiceList   | X_CMCC_LanInterface     |
  * | CT-COM    | X_CT-COM_VLANMode=2 + X_CT-COM_VLANIDMark  | X_CT-COM_WANGponLinkConfig.Enable/Mode/VLANIDMark | X_CT-COM_ServiceList | X_CT-COM_LanInterface |
  * | CU        | –                                          | X_CU_WANGponLinkConfig.Enable/Mode/VLANIDMark  | X_CU_ServiceList     | X_CU_LanInterface       |
@@ -183,9 +183,28 @@ export function planService(e: Evidence, connBase: string, service: string): { f
 }
 
 const LAN_IF: Record<Family, string | null> = {
-  huawei: null, zte: 'X_ZTE-COM_LanInterface', fiberhome: null,
+  huawei: null, zte: 'X_ZTE-COM_LanInterface', fiberhome: 'X_FH_LanInterface',
   cmcc: 'X_CMCC_LanInterface', ct: 'X_CT-COM_LanInterface', cu: 'X_CU_LanInterface', nokia: null,
 };
+
+/**
+ * Keluarga yang WAN internet-nya TIDAK meneruskan trafik tanpa binding.
+ * FiberHome: `X_FH_LanInterface` kosong → klien LAN/WiFi tidak dapat
+ * internet walau PPPoE Connected (lapangan, sama seperti praktik GenieACS).
+ * ZTE/Huawei meneruskan tanpa binding, jadi binding di sana opsional.
+ */
+export function bindingRequired(family: Family): boolean {
+  return family === 'fiberhome';
+}
+
+/**
+ * Default NAT per layanan: WAN internet (INTERNET) perlu NAT; WAN layanan
+ * manajemen/suara (TR069, VOIP) tidak — mengikuti praktik GenieACS/OLT.
+ */
+export function natDefault(service: string): boolean {
+  const s = service.toUpperCase();
+  return s.includes('INTERNET') || !/TR069|VOIP|IPTV|OTHER/.test(s);
+}
 
 /**
  * Binding port LAN/SSID ke WAN (internet hanya keluar lewat port terpilih).
@@ -229,6 +248,8 @@ export interface StdOptions {
   /** null = jangan ubah ConnectionType (isi slot yang sudah benar). */
   connectionType: string | null;
   bridge: boolean;
+  /** NATEnabled untuk mode route (default true). TR069/VOIP umumnya tanpa NAT. */
+  nat?: boolean;
   username?: string;
   password?: string;
   staticIp?: string;
@@ -254,11 +275,11 @@ export function planStandard(e: Evidence, connBase: string, o: StdOptions): Fill
     if (!o.bridge) {
       if (e.exists(`${connBase}PPPAuthenticationProtocol`)) f.push({ name: 'PPPAuthenticationProtocol', type: S, value: 'AUTO' });
       if (e.exists(`${connBase}ConnectionTrigger`)) f.push({ name: 'ConnectionTrigger', type: S, value: 'AlwaysOn' });
-      f.push({ name: 'NATEnabled', type: B, value: 'true' });
+      f.push({ name: 'NATEnabled', type: B, value: String(o.nat !== false) });
     }
   } else if (!o.bridge) {
     f.push({ name: 'AddressingType', type: S, value: o.staticIp ? 'Static' : 'DHCP' });
-    f.push({ name: 'NATEnabled', type: B, value: 'true' });
+    f.push({ name: 'NATEnabled', type: B, value: String(o.nat !== false) });
     if (o.staticIp) {
       f.push({ name: 'ExternalIPAddress', type: S, value: o.staticIp });
       f.push({ name: 'SubnetMask', type: S, value: o.netmask || '255.255.255.0' });

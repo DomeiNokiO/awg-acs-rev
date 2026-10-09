@@ -61,7 +61,10 @@ const CONN_LEAF =
 const WLAN_LEAF =
   '(?:Enable|Status|SSID|BeaconType|Channel|AutoChannelEnable|Standard|TotalAssociations|SSIDAdvertisementEnabled|' +
   'KeyPassphrase|PreSharedKey\\.1\\.KeyPassphrase|PreSharedKey\\.1\\.PreSharedKey|OperatingFrequencyBand|' +
-  'X_[A-Za-z0-9-]+_(?:Band|FrequencyBand|RFBand|KeyPassphrase|WPAKey|SSIDHide|HideSSID|SSIDHidden|HiddenSSID))';
+  'PreSharedKey\\.1\\.X_[A-Za-z0-9-]+_KeyPassphrase|' +
+  // Sandi vendor (mis. X_<vendor>_KeyPassphrase, _WPAKey, _WPAPassword, _PSK).
+  'X_[A-Za-z0-9-]+_[A-Za-z]*(?:Passphrase|PassPhrase|Password|WPAKey|WpaKey|PSK|Psk)|' +
+  'X_[A-Za-z0-9-]+_(?:Band|FrequencyBand|RFBand|SSIDHide|HideSSID|SSIDHidden|HiddenSSID))';
 
 /**
  * Leaf CPU/RAM vendor di bawah DeviceInfo (boleh satu objek vendor di
@@ -81,6 +84,7 @@ const INTEREST: RegExp[] = [
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.(?:X_[^.]+|WANEponInterfaceConfig|WANGponInterfaceConfig)(?:\\.[^.]+)*\\.${OPT_LEAF}$`),
   new RegExp(`^${IGD}WANDevice\\.\\d+\\.WANCommonInterfaceConfig\\.(?:WANAccessType|PhysicalLinkStatus|TotalBytesSent|TotalBytesReceived)$`),
   new RegExp(`^${IGD}LANDevice\\.\\d+\\.WLANConfiguration\\.\\d+\\.${WLAN_LEAF}$`),
+  new RegExp(`^${IGD}LANDevice\\.\\d+\\.LANEthernetInterfaceNumberOfEntries$`),
   // CPU/RAM: standar (ProcessStatus.CPUUsage, MemoryStatus.Total/Free) dan
   // leaf vendor di bawah DeviceInfo yang namanya memuat CPU/Mem/RAM
   // (X_HW_CpuUsed, X_ZTE-COM_…, X_CMCC_…, objek X_*.Memory…). Tabel proses

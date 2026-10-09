@@ -12,9 +12,12 @@
  *    mengirim amplop SOAP kosong alih-alih HTTP 204 (strictEnd), slot WAN
  *    kosong buatan OLT (emptySlot), tanpa data CPU/RAM (sys: false),
  *    sandi PPPoE/WiFi awal (pppPass, wifiPass), sandi selalu dibaca kosong
- *    (hideSecrets).
+ *    (hideSecrets), WAN FiberHome tanpa binding X_FH_LanInterface (fhUnbound).
  */
 import http from 'node:http';
+
+const FH_BIND_ALL = [1, 2, 3, 4].map((n) => `InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.${n}`)
+  .concat('InternetGatewayDevice.LANDevice.1.WLANConfiguration.1').join(',');
 
 export function makeDevice(vendor, serial, opts = {}) {
   const V = new Map();
@@ -42,6 +45,7 @@ export function makeDevice(vendor, serial, opts = {}) {
   put(`${P}ManagementServer.ConnectionRequestUsername`, 'olt-user');
   put(`${P}ManagementServer.PeriodicInformInterval`, '600');
   put(`${P}LANDevice.1.Hosts.HostNumberOfEntries`, '3');
+  put(`${P}LANDevice.1.LANEthernetInterfaceNumberOfEntries`, '4');
   put(`${W}WANConnectionDevice.1.WANIPConnection.1.Name`, '1_TR069_R_VID_200');
   put(`${W}WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress`, '10.20.0.5');
   const ppp = `${W}WANConnectionDevice.2.WANPPPConnection.1.`;
@@ -70,6 +74,9 @@ export function makeDevice(vendor, serial, opts = {}) {
   } else if (vendor === 'fiberhome') {
     put(`${ppp}X_FH_VLANID`, '100');
     put(`${ppp}X_FH_ServiceList`, 'INTERNET');
+    // Binding wajib FiberHome; fhUnbound = WAN lama tanpa binding (tidak ada internet).
+    put(`${ppp}X_FH_LanInterface`, opts.fhUnbound ? '' : FH_BIND_ALL);
+    put(`${ppp}NATEnabled`, 'true');
     put(`${ppp}ConnectionType`, 'PPPoE_Routed');
     put(`${ppp}TransportType`, 'PPPoE');
     put(`${ppp}ConnectionTrigger`, 'AlwaysOn');
@@ -82,7 +89,7 @@ export function makeDevice(vendor, serial, opts = {}) {
       const s3 = `${W}WANConnectionDevice.3.WANPPPConnection.1.`;
       for (const [k, v] of [['Name', '3_INTERNET_R_VID_200'], ['Enable', 'false'], ['ConnectionType', 'PPPoE_Routed'], ['TransportType', 'PPPoE'],
         ['ConnectionTrigger', 'AlwaysOn'], ['Username', ''], ['Password', ''], ['ConnectionStatus', 'Unconfigured'], ['ExternalIPAddress', '0.0.0.0'],
-        ['X_FH_VLANID', '0'], ['X_FH_ServiceList', '']]) put(s3 + k, v);
+        ['X_FH_VLANID', '0'], ['X_FH_ServiceList', ''], ['X_FH_LanInterface', ''], ['NATEnabled', 'false']]) put(s3 + k, v);
       put(`${W}WANConnectionDevice.3.X_FH_WANGponLinkConfig.Mode`, '0');
       put(`${W}WANConnectionDevice.3.X_FH_WANGponLinkConfig.VLANID`, '0');
     }
