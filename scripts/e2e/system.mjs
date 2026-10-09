@@ -30,7 +30,7 @@ hw.log = [];
 await inform(hw, acs.cwmp, '2 PERIODIC');
 const gpn = hw.log.filter((m) => m === 'GetParameterNames').length;
 const d2 = (await acs.get('/api/devices?limit=50')).items.find((d) => d.serial_number === 'HUAWEISYS');
-t.check(gpn === 1 && d2.cpu_usage === 55, `upgrade v3→v4: ${gpn} GPN (DeviceInfo.), CPU ${d2.cpu_usage}% — ${hw.log.length} RPC total`);
+t.check(gpn === 2 && d2.cpu_usage === 55, `upgrade v3→v5: ${gpn} GPN (DeviceInfo. + WANDevice.), CPU ${d2.cpu_usage}% — ${hw.log.length} RPC total`);
 
 // Siklus rutin (leaf panas) ikut memperbarui CPU/RAM dalam 1 GPV.
 db.prepare('UPDATE collection SET next_collect_at = 0, full_collect_at = ? WHERE device_id = ?').run(Date.now(), hid);

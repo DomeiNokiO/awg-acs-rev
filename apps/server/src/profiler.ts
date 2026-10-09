@@ -57,7 +57,7 @@ const CONN_LEAF =
   'TransportType|ConnectionTrigger|PPPAuthenticationProtocol|PPPoEServiceName|' +
   'X_[A-Za-z0-9-]+_(?:VLANID|VLANIDMark|VLAN|VLANEnable|VLANMode|8021p|802-1pMark|PRI|' +
   'ServiceList|SERVICELIST|ServiceType|ConnectionMode|LanInterface|IPMode|IPForwardList)|' +
-  'X_HW_LANBIND\\.(?:Lan|SSID)\\d+Enable|VLANID)';
+  'X_HW_LANBIND\\.(?:Lan|SSID)\\d+Enable|Stats\\.Ethernet(?:Bytes|Packets)(?:Sent|Received)|VLANID)';
 const WLAN_LEAF =
   '(?:Enable|Status|SSID|BeaconType|Channel|AutoChannelEnable|Standard|TotalAssociations|SSIDAdvertisementEnabled|' +
   'KeyPassphrase|PreSharedKey\\.1\\.KeyPassphrase|OperatingFrequencyBand|' +
@@ -90,8 +90,9 @@ const INTEREST: RegExp[] = [
   // ---- TR-181 ----
   /^Device\.DeviceInfo\.(?:Manufacturer|ModelName|SerialNumber|SoftwareVersion|HardwareVersion|UpTime)$/,
   /^Device\.Optical\.Interface\.\d+\.(?:Status|Name|OpticalSignalLevel|TransmitOpticalLevel|X_[^.]+)$/,
-  /^Device\.PPP\.Interface\.\d+\.(?:Enable|Status|ConnectionStatus|Name|Alias|Username|LowerLayers|LastConnectionError)$/,
-  /^Device\.IP\.Interface\.\d+\.(?:Enable|Status|Name|Alias|LowerLayers|IPv4Address\.\d+\.IPAddress)$/,
+  /^Device\.PPP\.Interface\.\d+\.(?:Enable|Status|ConnectionStatus|Name|Alias|Username|LowerLayers|LastConnectionError|Stats\.Bytes(?:Sent|Received))$/,
+  /^Device\.IP\.Interface\.\d+\.(?:Enable|Status|Name|Alias|LowerLayers|IPv4Address\.\d+\.IPAddress|Stats\.Bytes(?:Sent|Received))$/,
+  /^Device\.Optical\.Interface\.\d+\.Stats\.Bytes(?:Sent|Received)$/,
   /^Device\.Ethernet\.VLANTermination\.\d+\.(?:Enable|Status|Name|Alias|VLANID|LowerLayers)$/,
   /^Device\.WiFi\.SSID\.\d+\.(?:Enable|Status|SSID|LowerLayers)$/,
   /^Device\.WiFi\.Radio\.\d+\.(?:Enable|OperatingFrequencyBand|Channel)$/,

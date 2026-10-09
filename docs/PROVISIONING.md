@@ -282,6 +282,18 @@ GPN WANDevice.  → WAN baru muncul di UI
 - TR-181: hanya `existing` untuk `PPP.Interface` (username/password/VLAN);
   WAN baru belum didukung.
 
+### Trafik live
+
+`apps/server/src/live.ts` + `cwmp.ts`: setelah antrean sesi kosong, bila ada
+pemantauan live aktif untuk ONU itu, ACS **tidak** membalas 204 — ia menunggu
+sampai jadwal poll berikutnya (maks. 10 detik), mengantrekan
+`GetParameterValues` 2 counter (kunci `live_*`), lalu melanjutkan sesi
+(`CwmpSession.resume()`). Hasilnya tidak disimpan sebagai parameter, hanya
+dihitung menjadi Mbps. Poll live dikecualikan dari `ACS_MAX_RPC_PER_SESSION`;
+perintah lain tetap didahulukan. Counter yang ditolak → pasangan berikutnya
+(urutan di [PARAMETERS.md](PARAMETERS.md#4-counter-trafik-trafik-live)).
+Durasi dihitung sejak ONU menjawab pertama kali.
+
 ### Connection Request (tombol Hubungi)
 
 - GET ke `ConnectionRequestURL` tanpa kredensial → bila 401, ulang dengan

@@ -132,6 +132,9 @@ Semua membutuhkan autentikasi kecuali `/api/health` dan `/api/login`.
 | POST | `/api/devices/:id/config` | konfigurasi terstruktur, lihat tabel di bawah |
 | PUT | `/api/devices/:id` | **admin** — ubah `connection_request_url/user/pass`, `cwmp_user/pass`, `group_name`, `notes` |
 | POST | `/api/devices/:id/connect` | kirim Connection Request (ACS → CPE), Digest/Basic. 200 `{ok,status,auth}`; 409 belum ada URL; 429 terlalu cepat (≤ 1×/10 dtk); 502 `{error,reason:'auth'|'unreachable'|'http'}` |
+| POST | `/api/devices/:id/live` | mulai trafik live `{seconds?: 15–300 (60), intervalSec?: 2–10 (3)}` → status + `cr` (hasil Connection Request) |
+| GET | `/api/devices/:id/live` | status `{status: idle\|waiting\|live\|done\|stopped\|error, message, source:{label,rx,tx}, samples:[{t, down, up}] (Mbps), totals}` |
+| DELETE | `/api/devices/:id/live` | hentikan trafik live |
 | POST | `/api/devices/:id/read` | `{paths:[...]}` — GET Value RPC (partial path berakhiran `.` diizinkan) |
 | POST | `/api/devices/:id/write` | `{values:{path: nilai}}` (tipe dari laporan ONU) atau `{params:[{name,type,value}]}` — SET Value RPC |
 | POST | `/api/devices/:id/reboot` | antrekan reboot |

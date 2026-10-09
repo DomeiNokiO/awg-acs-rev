@@ -12,6 +12,35 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0f. Trafik internet live, referensi parameter, keamanan produksi
+
+**Trafik live (Mbps)** — `apps/server/src/live.ts`, `components/TrafficLive.tsx`:
+- ACS menahan sesi CWMP dan membaca 2 counter byte WAN tiap 3 detik selama
+  durasi pilihan (30 dtk – 5 mnt); berhenti sendiri / tombol Hentikan.
+- Counter: `WANPPPConnection.{i}.Stats.EthernetBytes*` koneksi utama →
+  `WANCommonInterfaceConfig.TotalBytes*` → `WANEthernetInterfaceConfig.Stats.*`
+  (TR-181: `PPP/IP.Interface.{i}.Stats.Bytes*`, `Optical.Interface.1.Stats.*`);
+  yang ditolak dilewati otomatis; wrap counter 32-bit ditangani.
+- UI: nilai terkini, rata-rata, puncak; grafik 2 seri (palet tervalidasi
+  untuk buta warna, terang & gelap), legenda + label ujung garis, crosshair
+  + tooltip, tabel data.
+- API: `POST/GET/DELETE /api/devices/:id/live`. Maks. 25 pemantauan bersamaan;
+  poll live dikecualikan dari batas RPC per sesi.
+- `CwmpSession.resume()`, `TaskQueue.dequeueWhere()`; profil v5 (upgrade
+  ringan: `GetParameterNames WANDevice.` agar counter `Stats.*` dikenal).
+- Uji: `scripts/e2e/live.mjs` (wrap 32-bit, fallback counter, ONU tanpa
+  counter, berhenti manual) — terukur 50,0/10,0 Mbps pada laju simulasi 50/10.
+
+**Referensi parameter** — `docs/PARAMETERS.md` (baru): redaman, CPU/RAM, WAN,
+WiFi, counter trafik per vendor dengan status bukti (standar / lapangan /
+komunitas / pola). **`scripts/param-report.mjs`** (baru): laporan path yang
+benar-benar dipakai ONU per vendor/model/firmware dari database (read-only,
+tanpa data pelanggan) untuk melengkapi dokumen tersebut.
+
+**Produksi**: diverifikasi bahwa docs, tes, simulator, source, `.env`, DB, dan
+`.git` tidak bisa diakses lewat HTTP (404, termasuk path traversal). Link
+**API Docs** di sidebar sebelumnya 404 — kini menyajikan `docs/API.md` di `/API.md`.
+
 ## 0e. CPU & RAM ONU (semua vendor dan tipe) + uji e2e di repo
 
 **Sumber data** (urutan prioritas):

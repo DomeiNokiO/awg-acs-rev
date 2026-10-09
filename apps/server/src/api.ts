@@ -27,7 +27,7 @@ import { loadCatalog, catalogWritePath, writeCatalogFile, CATALOG_FILE } from '.
 import { validateCatalog } from './catalog-schema.ts';
 import { validatePreset, applyPresets, type PresetCondition, type PresetAction } from './presets.ts';
 import { applyConfig, CONFIG_TYPES, type ConfigRequest } from './configure.ts';
-import { buildInsight } from './insight.ts';
+import { buildInsight, trafficCounters } from './insight.ts';
 import { sendConnectionRequest, crCooldown, markCr } from './connreq.ts';
 import { WebhookDispatcher, type DeliveryLogEntry } from './webhooks.ts';
 import type { WebhookRow } from '@acs/core';
@@ -323,6 +323,54 @@ function maskDevice<T extends {
         : `ONU membalas HTTP ${r.status} untuk Connection Request`;
     db.addEvent(id, 'connect_failed', msg);
     return reply.code(502).send({ error: msg, reason: r.reason, status: r.status });
+  });
+
+  /* ---------------- trafik live (Mbps) ---------------- */
+
+  /**
+   * Mulai pemantauan trafik live: pilih pasangan counter byte WAN, lalu
+   * panggil ONU (Connection Request) agar membuka sesi. Selama sesi itu
+   * ACS membaca counter tiap `intervalSec` detik (lihat live.ts).
+   */
+  app.post('/api/devices/:id/live', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const d = db.getDevice(id);
+    if (!d || !ctx.live) return reply.code(404).send({ error: 'device_not_found' });
+    const b = (req.body ?? {}) as { seconds?: unknown; intervalSec?: unknown };
+    const seconds = Math.min(300, Math.max(15, Number(b.seconds) || 60));
+    const intervalMs = Math.min(10, Math.max(2, Number(b.intervalSec) || 3)) * 1000;
+    const params = db.getParams(id);
+    const model = d.data_model === 'TR-181' || d.data_model === 'TR-098' ? d.data_model : null;
+    const started = ctx.live.start(id, trafficCounters(params, model), seconds, intervalMs);
+    if ('error' in started) return reply.code(409).send(started);
+
+    // Sesi sudah terbuka (mis. ONU sedang Inform) → poll mulai di sesi itu.
+    const open = [...ctx.sessions.values()].some((e) =>
+      e.identity && `${e.identity.oui}-${e.identity.productClass}-${e.identity.serialNumber}` === id
+      && e.session.state === 'in_session');
+    let cr: { ok: boolean; error?: string } = { ok: true };
+    if (!open) {
+      if (!d.connection_request_url) cr = { ok: false, error: 'ONU belum melaporkan ConnectionRequestURL' };
+      else if (crCooldown(id) > 0) cr = { ok: true };
+      else {
+        markCr(id);
+        const r = await sendConnectionRequest(d.connection_request_url, d.connection_request_user ?? '', d.connection_request_pass ?? '');
+        cr = r.ok ? { ok: true } : { ok: false, error: r.reason === 'unreachable' ? `ONU tidak terjangkau (${r.detail})` : `Connection Request ditolak (HTTP ${r.status ?? '-'})` };
+      }
+    }
+    db.addEvent(id, 'live', `Trafik live dimulai (${seconds} detik, tiap ${intervalMs / 1000} detik)`);
+    return reply.send({ ...ctx.live.get(id), cr });
+  });
+
+  app.get('/api/devices/:id/live', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    return reply.send(ctx.live?.get(id) ?? { status: 'idle', samples: [] });
+  });
+
+  app.delete('/api/devices/:id/live', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    ctx.live?.stop(id);
+    return reply.send(ctx.live?.get(id) ?? { status: 'idle', samples: [] });
   });
 
   app.post('/api/devices/:id/read', async (req, reply) => {

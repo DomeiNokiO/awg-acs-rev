@@ -310,6 +310,27 @@ dan dicatat di log tugas; parameter barulah (mis.
 
 Detail per file: [CHANGELOG.md](CHANGELOG.md).
 
+## Instalasi produksi: apa yang berjalan dan apa yang tersaji
+
+Installer meng-clone seluruh repo (dibutuhkan `git` untuk `update.sh` dan
+rollback), termasuk `docs/`, tes, dan simulator. Itu **aman** dan tidak perlu
+dibuang:
+
+| Bagian repo | Di produksi | Bisa diakses dari luar? |
+|-------------|-------------|-------------------------|
+| `apps/web/out/` (hasil build UI) | disajikan port API/UI | ya — inilah UI |
+| `docs/API.md` | disajikan di `/API.md` (link "API Docs") | ya — hanya file ini |
+| `apps/server/src`, `packages/acs-core/src` | dijalankan | tidak |
+| `docs/` lain, `README.md`, `CHANGELOG.md` | tidak dipakai server | tidak (404) |
+| `apps/*/test`, `packages/*/test`, `scripts/e2e/`, `scripts/sim-ont.mjs` | tidak pernah di-import server; hanya jalan bila dijalankan manual | tidak (404) |
+| `.env`, `data/` (DB, `cr.secret`, TLS), `.git/` | dibaca server / git | tidak (404) |
+
+Diverifikasi otomatis: permintaan ke `/.env`, `/data/acs.db`, `/.git/config`,
+`/package.json`, source, tes, simulator, dan varian path traversal (`/../.env`,
+`/%2e%2e/.env`) semuanya dibalas 404 di port API/UI maupun CWMP. Docs + tes +
+skrip berjumlah ± 180 KB; yang besar adalah `node_modules` (dibutuhkan untuk
+build UI saat update).
+
 ## Beban ONU & ACS — kenapa ringan
 
 Dirancang supaya ribuan ONU bisa dikelola tanpa membebani CPU/RAM ONU yang kecil:
@@ -328,6 +349,25 @@ Dirancang supaya ribuan ONU bisa dikelola tanpa membebani CPU/RAM ONU yang kecil
 Terukur dengan simulator ONU (ZTE/Huawei/FiberHome/CMCC): pemetaan awal 42–50 RPC
 dalam 2 sesi, Inform periodik 0 RPC, siklus rutin 1 GPV, pembacaan penuh 2 GPV.
 Angka ONU nyata bergantung jumlah WAN/SSID-nya.
+
+## Trafik internet live (Mbps)
+
+Di **Detail Perangkat → Ringkasan → Trafik internet (live)**: pilih durasi
+(30 detik – 5 menit) lalu **Mulai live**. Grafik download/upload diperbarui
+tiap 3 detik, dengan nilai terkini, rata-rata, puncak, tooltip, dan tabel data.
+
+Cara kerjanya: TR-069 tidak punya push statistik, jadi ACS mengirim Connection
+Request lalu **menahan sesi CWMP** dan membaca 2 counter byte WAN tiap 3 detik
+(`WANPPPConnection.{i}.Stats.EthernetBytes*` koneksi PPPoE utama →
+`WANCommonInterfaceConfig.TotalBytes*` → `WANEthernetInterfaceConfig.Stats.*`;
+TR-181 `PPP/IP.Interface.{i}.Stats.Bytes*`). Mbps = selisih byte × 8 / selisih
+waktu; counter 32-bit yang berputar di 4 GiB ditangani.
+
+Beban: 1 GetParameterValues berisi 2 parameter per 3 detik, hanya selama
+dipantau; berhenti otomatis setelah durasi habis atau tombol **Hentikan**.
+Maks. 25 pemantauan bersamaan. Bila ONU tidak terjangkau Connection Request,
+pemantauan dimulai saat ONU Inform berikutnya. ONU tanpa counter WAN →
+pesan jelas, sesi langsung dilepas.
 
 ## Provisioning & Konfigurasi ONU
 
@@ -377,6 +417,11 @@ Ubah/Hapus) dan semua SSID (tombol Ubah). Tab **Konfigurasi**:
 | Hapus / aktif-nonaktif WAN | `{"type":"wan-delete","target":…}` / `{"type":"wan-enable","target":…,"enable":false}` | `DeleteObject` / SPV `Enable` |
 | Interval Inform | `{"type":"inform-interval","informInterval":600}` | SPV `ManagementServer.PeriodicInformInterval` |
 | Reboot / reset pabrik | `POST /reboot` / `POST /factory-reset {"confirm":"<serial>"}` (admin) | `Reboot` / `FactoryReset` |
+
+Referensi seluruh parameter per vendor (redaman, CPU/RAM, WAN, WiFi, counter
+trafik) beserta status buktinya: **[docs/PARAMETERS.md](docs/PARAMETERS.md)**.
+Laporan path yang benar-benar dipakai ONU di server Anda:
+`node /opt/acs/scripts/param-report.mjs`.
 
 Nama parameter vendor (VLAN level koneksi/link, ServiceList, binding) untuk
 Huawei, ZTE, FiberHome, CMCC, CT-COM, CU dipilih otomatis — tabel lengkap di

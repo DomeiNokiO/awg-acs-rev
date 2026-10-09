@@ -9,6 +9,7 @@ import { api, type DeviceRow, type ParamRow, type EventRow, type DeviceInsight }
 import { Configurator, wanLabel, type ConfigPreset } from '@/components/Configurator';
 import { rxLevel, RX_LABEL, fmtDbm, fmtUptime, loadLevel, fmtPct, fmtKb } from '@/lib/optical';
 import { connectionError } from '@/lib/wan';
+import { TrafficLive } from '@/components/TrafficLive';
 
 type Tab = 'summary' | 'config' | 'params' | 'commands' | 'discovered' | 'events' | 'tasks';
 
@@ -682,6 +683,8 @@ function SummaryPanel({ device, insight, onEdit, onDeleteWan, onToggleWan }: {
           : 'Redaman belum terbaca. Tekan Segarkan; bila tetap kosong, cek tab Peristiwa untuk path yang ditolak perangkat.'}
         {g.ponStatus && <> · Status PON: <b>{g.ponStatus}</b></>}
       </div>
+
+      <TrafficLive deviceId={device.id} />
 
       <div className="d-flex align-items-center mb-2">
         <h4 className="small text-uppercase text-muted fw-semibold mb-0">

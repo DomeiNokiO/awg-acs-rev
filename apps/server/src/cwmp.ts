@@ -17,6 +17,7 @@ import { checkCwmpAuth, type CwmpCredential } from './cwmp-auth.ts';
 import { discoveryRoots, wanRoots, profileFromNodes, MAX_PROFILE_PATHS, SYSTEM_LEAF } from './profiler.ts';
 import { essentialPaths, opticalCandidates, opticalFamily } from './modelpaths.ts';
 import { buildInsight, detectDataModel, summaryFields, type DataModel } from './insight.ts';
+import type { LiveTraffic } from './live.ts';
 
 /** Ukuran maksimum body SOAP — 1 MB. Lebih dari itu kemungkinan bukan CPE. */
 const MAX_BODY = 1024 * 1024;
@@ -26,7 +27,7 @@ const MAX_BODY = 1024 * 1024;
  * dipetakan ulang otomatis saat Inform berikutnya — profil lama (sebelum
  * perbaikan discovery) tidak memuat redaman/PPPoE di WANConnectionDevice.N.
  */
-export const PROFILE_VERSION = 4;
+export const PROFILE_VERSION = 5;
 
 /**
  * Upgrade profil ringan: dari versi ini ke PROFILE_VERSION cukup memetakan
@@ -35,15 +36,23 @@ export const PROFILE_VERSION = 4;
  */
 export const PROFILE_INCREMENTAL: Record<number, (root: string) => string[]> = {
   3: (root) => [`${root}DeviceInfo.`],
+  // v4 → v5: counter byte koneksi WAN (Stats.*) untuk trafik live.
+  4: (root) => (root === 'Device.' ? ['Device.PPP.Interface.', 'Device.IP.Interface.'] : [`${root}WANDevice.`]),
 };
 
 /** Petakan ulang subtree untuk upgrade profil ringan; false = perlu penuh. */
 export function upgradeProfile(ctx: CwmpContext, deviceId: string, from: number): boolean {
-  const plan = PROFILE_INCREMENTAL[from];
-  if (!plan) return false;
+  // Upgrade bertingkat: setiap langkah from → PROFILE_VERSION harus punya
+  // rencana subtree; bila ada yang tidak, pemetaan penuh yang dipakai.
+  const steps: ((root: string) => string[])[] = [];
+  for (let v = from; v < PROFILE_VERSION; v++) {
+    const plan = PROFILE_INCREMENTAL[v];
+    if (!plan) return false;
+    steps.push(plan);
+  }
   const root = deviceModel(ctx, deviceId) === 'TR-181' ? 'Device.' : 'InternetGatewayDevice.';
   ctx.db.setProfileVersion(deviceId, PROFILE_VERSION);
-  ctx.db.enqueueDiscoveryPaths(deviceId, plan(root));
+  ctx.db.enqueueDiscoveryPaths(deviceId, [...new Set(steps.flatMap((p) => p(root)))]);
   continueDiscovery(ctx, deviceId);
   return true;
 }
@@ -94,6 +103,8 @@ export interface CwmpContext {
   collectIntervalMin?: number;
   /** Kredensial Connection Request yang dipasang ACS (null = nonaktif). */
   crCreds?: { user: string; pass: string } | null;
+  /** Pemantauan trafik live (lihat live.ts). */
+  live?: LiveTraffic;
 }
 
 function deviceIdOf(identity: DeviceIdentity): string {
@@ -137,6 +148,9 @@ const MAX_RPC_PER_SESSION = (() => {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 40;
 })();
 
+/** Lama maksimum ACS menahan respons di antara poll trafik live. */
+const LIVE_MAX_HOLD_MS = 10_000;
+
 /** Sesi tanpa aktivitas selama ini dibuang dari memori. */
 const SESSION_IDLE_MS = 10 * 60 * 1000;
 /** Batas waktu menebak sesi lewat IP untuk CPE tanpa cookie. */
@@ -169,6 +183,10 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
         // Batas beban ONU: setelah N RPC sesi diakhiri dengan rapi (204);
         // sisa antrean tetap tersimpan dan dikirim pada sesi berikutnya.
         if (MAX_RPC_PER_SESSION > 0 && entry.rpcCount >= MAX_RPC_PER_SESSION) {
+          // Poll trafik live (2 counter) tetap boleh lewat: operator sedang
+          // memantau, dan bebannya sudah diatur oleh interval live.
+          const liveTask = ctx.queue.dequeueWhere(id, (t) => t.rpc.key.startsWith('live_'));
+          if (liveTask) return liveTask.rpc;
           const left = ctx.queue.size(id);
           if (left) {
             ctx.db.addEvent(id, 'cwmp',
@@ -182,6 +200,13 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
       },
       record: (device, result) => {
         const id = deviceIdOf(device);
+        // Hasil poll trafik live: hanya untuk perhitungan Mbps, tidak
+        // disimpan sebagai parameter (dibaca tiap beberapa detik).
+        if (ctx.live && 'commandKey' in result && result.commandKey?.startsWith('live_')) {
+          if (result.kind === 'gpv' && Object.keys(result.values).length) ctx.live.onValues(id, result.values);
+          else ctx.live.onFault(id);
+          return;
+        }
         ctx.onResult?.(id, result);
         try {
           applyResult(ctx, id, result);
@@ -239,7 +264,7 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
         `CPE tidak mengirim cookie sesi — sesi dikenali lewat ${via}`);
     }
 
-    const outcome = entry.session.handle(raw);
+    let outcome = entry.session.handle(raw);
 
     if (outcome.inform) {
       const id = deviceIdOf(outcome.inform.identity);
@@ -269,6 +294,22 @@ export function registerCwmpRoutes(app: FastifyInstance, ctx: CwmpContext): void
         events: outcome.inform.events,
         ip,
       });
+    }
+
+    // Trafik live: sesi tidak ditutup selama operator memantau. Tunggu
+    // sampai jadwal poll berikutnya, antrekan bacaan 2 counter, lalu
+    // lanjutkan sesi (bukan 204). Antrean lain tetap didahulukan.
+    if (ctx.live && entry.identity && outcome.status === 204) {
+      const id = deviceIdOf(entry.identity);
+      if (ctx.live.isActive(id)) {
+        const wait = Math.min(ctx.live.waitMs(id), LIVE_MAX_HOLD_MS);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        const rpc = ctx.live.buildRpc(id);
+        if (rpc) {
+          ctx.queue.enqueue(id, rpc, undefined, 60_000);
+          outcome = entry.session.resume();
+        }
+      }
     }
 
     if (TRACE) {

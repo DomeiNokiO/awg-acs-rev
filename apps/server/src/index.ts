@@ -16,6 +16,7 @@ import {
   continueDiscovery, collectPaths, hotPaths, maybeProvisionCrCreds, upgradeProfile, PROFILE_VERSION,
 } from './cwmp.ts';
 import { registerApiRoutes } from './api.ts';
+import { LiveTraffic } from './live.ts';
 import { loadCatalog } from './catalog.ts';
 import { applyPresets, seedDefaultPresets } from './presets.ts';
 import { WebhookDispatcher } from './webhooks.ts';
@@ -75,7 +76,7 @@ async function main(): Promise<void> {
   const webhooks = new WebhookDispatcher(db);
   const credentials = loadCredentials(process.env['ACS_CWMP_CREDENTIALS']);
 
-  const ctx: CwmpContext = { db, queue, sessions, credentials };
+  const ctx: CwmpContext = { db, queue, sessions, credentials, live: new LiveTraffic() };
 
   // Preset pertama: hanya dibuat bila admin belum membuat apa pun.
   // Berisi baca data berkala, keamanan dasar, dan Interval Inform —
@@ -241,6 +242,14 @@ async function main(): Promise<void> {
     // supaya cocok dengan tipe FastifyPluginAsync.
     const staticMod = await import('@fastify/static');
     api.register(staticMod.default, { root: dist, prefix: '/' });
+
+    // Dokumentasi API (link "API Docs" di sidebar). Hanya file ini yang
+    // disajikan dari luar apps/web/out — source, tes, .env, dan DB tidak.
+    const apiDoc = fileURLToPath(new URL('../../../docs/API.md', import.meta.url));
+    api.get('/API.md', async (_req, reply) => {
+      if (!(await pathExists(apiDoc))) return reply.code(404).type('text/plain').send('API.md tidak ada');
+      return reply.type('text/markdown; charset=utf-8').send(readFileSync(apiDoc, 'utf8'));
+    });
 
     // Next.js export menghasilkan file per rute: /catalog -> catalog.html.
     // @fastify/static TIDAK melayani URL tanpa ekstensi, jadi /catalog jatuh

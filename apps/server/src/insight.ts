@@ -560,6 +560,45 @@ export function extractSystem(params: ParamLike[]): SystemInfo {
   return out;
 }
 
+/* ------------------------------------------------------------------ *
+ * Counter trafik WAN (untuk trafik live)
+ * ------------------------------------------------------------------ */
+
+export interface TrafficCounter { label: string; rx: string; tx: string }
+
+/**
+ * Pasangan counter byte WAN, urut dari yang paling tepat mewakili trafik
+ * internet: koneksi PPPoE/IP utama → antarmuka WAN umum → fisik/optik.
+ * Pasangan yang kedua path-nya sudah terbukti ada di perangkat didahulukan;
+ * sisanya tetap dicoba (counter yang ditolak dilewati otomatis).
+ */
+export function trafficCounters(params: ParamLike[], model?: DataModel | null): TrafficCounter[] {
+  const dm = model ?? detectDataModel(params.map((p) => p.path));
+  const known = new Set(params.map((p) => p.path));
+  const wan = extractWan(params, dm);
+  const main = primaryPppoe(wan) ?? wan.find((c) => c.kind === 'ip' && c.externalIp && c.externalIp !== '0.0.0.0' && !/TR069|tr069|MGMT/i.test(c.name ?? ''));
+  const out: TrafficCounter[] = [];
+  const add = (label: string, rx: string, tx: string) => { if (!out.some((c) => c.rx === rx)) out.push({ label, rx, tx }); };
+  if (dm === 'TR-181') {
+    if (main) add(`PPP ${main.name ?? `#${main.instance}`}`, `${main.base}Stats.BytesReceived`, `${main.base}Stats.BytesSent`);
+    for (const p of params) {
+      const m = /^(Device\.IP\.Interface\.\d+\.)LowerLayers$/.exec(p.path);
+      if (m && main && p.value.replace(/\.$/, '') === main.base.slice(0, -1)) add('IP (di atas PPP)', `${m[1]}Stats.BytesReceived`, `${m[1]}Stats.BytesSent`);
+    }
+    add('Optik PON', 'Device.Optical.Interface.1.Stats.BytesReceived', 'Device.Optical.Interface.1.Stats.BytesSent');
+  } else {
+    if (main) {
+      const where = main.wcd !== null ? `WCD ${main.wcd}` : '';
+      add(`${main.kind === 'ppp' ? 'PPPoE' : 'IP'} ${where} · ${main.name ?? ''}`.trim(), `${main.base}Stats.EthernetBytesReceived`, `${main.base}Stats.EthernetBytesSent`);
+    }
+    const wd = /^(InternetGatewayDevice\.WANDevice\.\d+\.)/.exec(main?.base ?? '')?.[1] ?? 'InternetGatewayDevice.WANDevice.1.';
+    add('WAN (WANCommonInterfaceConfig)', `${wd}WANCommonInterfaceConfig.TotalBytesReceived`, `${wd}WANCommonInterfaceConfig.TotalBytesSent`);
+    add('WAN Ethernet', `${wd}WANEthernetInterfaceConfig.Stats.BytesReceived`, `${wd}WANEthernetInterfaceConfig.Stats.BytesSent`);
+  }
+  const proven = (c: TrafficCounter) => known.has(c.rx) && known.has(c.tx);
+  return [...out.filter(proven), ...out.filter((c) => !proven(c))];
+}
+
 /** WANConnectionDevice yang ada di perangkat — kandidat lokasi WAN baru. */
 export interface WcdInfo {
   index: number;

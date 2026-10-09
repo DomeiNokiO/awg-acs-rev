@@ -478,3 +478,26 @@ code, kbd, pre, .font-monospace { font-family: ui-monospace, SFMono-Regular, Men
 .load-good { color: var(--ok); }
 .load-warn { color: var(--warn); font-weight: 600; }
 .load-bad { color: var(--bad); font-weight: 700; }
+
+/* ---- Trafik live -----------------------------------------------------------
+   Seri: slot 1 biru (Download), slot 2 oranye (Upload) — palet tervalidasi
+   (CVD ΔE ≥ 24, kontras ≥ 3:1) untuk permukaan terang dan gelap. */
+:root { --series-down: #2a78d6; --series-up: #eb6834; --chart-grid: #e8e7e3; --chart-surface: var(--surface, #fff); }
+[data-bs-theme="dark"] { --series-down: #3987e5; --series-up: #d95926; --chart-grid: #383835; --chart-surface: #1a1a19; }
+.traffic-chart svg { display: block; overflow: visible; }
+.traffic-chart .grid { stroke: var(--chart-grid); stroke-width: 1; }
+.traffic-chart .axis { fill: var(--ink-3, #94a3b8); font-size: 11px; font-variant-numeric: tabular-nums; }
+.traffic-chart .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.traffic-chart .line.down { stroke: var(--series-down); }
+.traffic-chart .line.up { stroke: var(--series-up); }
+.traffic-chart .dot { stroke: var(--chart-surface); stroke-width: 2; }
+.traffic-chart .dot.down { fill: var(--series-down); }
+.traffic-chart .dot.up { fill: var(--series-up); }
+.traffic-chart .crosshair, .traffic-chart .leader { stroke: var(--ink-3, #94a3b8); stroke-width: 1; }
+.traffic-chart .end-label { fill: var(--ink, #0f172a); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart-tip { position: absolute; pointer-events: none; background: var(--surface, #fff); border: 1px solid var(--line); border-radius: 8px; padding: .4rem .6rem; font-size: .8rem; box-shadow: var(--shadow); min-width: 160px; }
+.key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: .3rem; }
+.key.down { background: var(--series-down); }
+.key.up { background: var(--series-up); }
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: livepulse 1.2s ease-in-out infinite; }
+@keyframes livepulse { 50% { opacity: .3; } }

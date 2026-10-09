@@ -98,6 +98,27 @@ export function makeDevice(vendor, serial, opts = {}) {
       put(`${DI}X_CMCC_SysInfo.MemoryTotal`, '134217728'); put(`${DI}X_CMCC_SysInfo.MemoryFree`, '33554432');
     }
   }
+  // Counter trafik dinamis: nilai = awal + laju × waktu (wrap 32-bit).
+  // ZTE mulai dekat 2^32 untuk menguji wrap; CMCC sengaja tanpa counter.
+  const counters = new Map();
+  const traffic = opts.traffic ?? { down: 50, up: 10 };
+  // Counter diakumulasi per pembacaan, sehingga laju (mbps) boleh berubah
+  // kapan saja tanpa membuat counter mundur.
+  const ctr = (path, mbps, start = 0) => { counters.set(path, { mbps, acc: start, at: Date.now() }); put(path, start); };
+  if (vendor === 'zte') {
+    ctr(`${ppp}Stats.EthernetBytesReceived`, traffic.down, 2 ** 32 - 20e6);
+    ctr(`${ppp}Stats.EthernetBytesSent`, traffic.up, 1e6);
+  } else if (vendor === 'huawei' || vendor === 'fiberhome') {
+    ctr(`${W}WANCommonInterfaceConfig.TotalBytesReceived`, traffic.down, 5e8);
+    ctr(`${W}WANCommonInterfaceConfig.TotalBytesSent`, traffic.up, 1e8);
+  }
+  const counterValue = (path) => {
+    const c = counters.get(path);
+    const now = Date.now();
+    c.acc += (c.mbps * 1e6 / 8) * ((now - c.at) / 1000);
+    c.at = now;
+    return String(Math.floor(c.acc) % 2 ** 32);
+  };
   const rebuild = () => {
     objects.clear();
     for (const k of V.keys()) {
@@ -110,7 +131,7 @@ export function makeDevice(vendor, serial, opts = {}) {
     }
   };
   rebuild();
-  return { V, objects, extraObjects, rebuild, oui, pc, man, serial, vendor, opts, log: [], errors: [], spvLog: [], rebooted: 0 };
+  return { V, objects, extraObjects, rebuild, counters, counterValue, oui, pc, man, serial, vendor, opts, log: [], errors: [], spvLog: [], rebooted: 0 };
 }
 
 const esc = (v) => String(v).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
@@ -138,7 +159,7 @@ function respond(dev, xml) {
         for (const [k, v] of dev.V) if (k.startsWith(p)) out.push([k, v]);
       } else {
         if (!dev.V.has(p)) return fault(dev, 9005, 'Invalid parameter name');
-        out.push([p, dev.V.get(p)]);
+        out.push([p, dev.counters.has(p) ? dev.counterValue(p) : dev.V.get(p)]);
       }
     }
     return env(dev, `<cwmp:GetParameterValuesResponse><ParameterList soap-enc:arrayType="cwmp:ParameterValueStruct[${out.length}]">${out.map(([k, v]) => `<ParameterValueStruct><Name>${esc(k)}</Name><Value xsi:type="xsd:string">${esc(v)}</Value></ParameterValueStruct>`).join('')}</ParameterList></cwmp:GetParameterValuesResponse>`);

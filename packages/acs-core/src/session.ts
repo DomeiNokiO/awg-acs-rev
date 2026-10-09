@@ -392,6 +392,17 @@ export class CwmpSession {
     return { responseXml: '', status: 204, done: true };
   }
 
+  /**
+   * Lanjutkan sesi yang baru saja kehabisan RPC (sebelum respons 204 dikirim).
+   * Dipakai mode trafik live: ACS menunggu sebentar, mengantrekan bacaan
+   * counter berikutnya, lalu meneruskan sesi alih-alih menutupnya.
+   */
+  resume(): SessionOutcome {
+    if (!this.identity) return { responseXml: '', status: 204, done: true };
+    this.state = 'in_session';
+    return this.nextRpcOrClose();
+  }
+
   private env(id: string, body: string): string {
     return buildEnvelope(id, body, this.cwmpNs);
   }
@@ -518,6 +529,18 @@ export class TaskQueue {
     let idx = q.findIndex((t) => PRIORITY_METHODS.has(t.rpc.method));
     if (idx < 0) idx = q.length ? 0 : -1;
     const task = idx >= 0 ? q.splice(idx, 1)[0]! : null;
+    if (q.length === 0) this.queues.delete(deviceId);
+    return task;
+  }
+
+  /** Ambil RPC pertama yang memenuhi `pred` (dipakai di luar batas RPC per sesi). */
+  dequeueWhere(deviceId: string, pred: (t: QueuedTask) => boolean): QueuedTask | null {
+    const q = this.queues.get(deviceId);
+    if (!q) return null;
+    const now = Date.now();
+    const idx = q.findIndex((t) => t.expiresAt >= now && pred(t));
+    if (idx < 0) return null;
+    const task = q.splice(idx, 1)[0]!;
     if (q.length === 0) this.queues.delete(deviceId);
     return task;
   }

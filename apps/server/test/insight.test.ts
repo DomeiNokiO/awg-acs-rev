@@ -133,7 +133,7 @@ test('profiler: leaf menarik — PPPoE di instans mana pun, optik vendor, tabel 
   assert.ok(!isInterestingLeaf(`${base}WANConnectionDevice.1.WANPPPConnection.1.`));
   const prof = profileFromNodes([
     `${base}WANConnectionDevice.2.WANPPPConnection.1.Username`,
-    `${base}WANConnectionDevice.2.WANPPPConnection.1.Stats.EthernetBytesSent`,
+    `${base}WANConnectionDevice.2.WANPPPConnection.1.Stats.ErrorsSent`,
   ]);
   assert.deepEqual(prof, [`${base}WANConnectionDevice.2.WANPPPConnection.1.Username`]);
 });
