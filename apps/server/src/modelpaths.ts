@@ -46,10 +46,6 @@ export const PATH_INFO_098: string[] = [
   `${P}DeviceInfo.ProcessStatus.CPUUsage`,
   `${P}DeviceInfo.MemoryStatus.Total`,
   `${P}DeviceInfo.MemoryStatus.Free`,
-  // Remote management (akses WAN ke ONU): standar TR-069 + ACL Huawei.
-  // Dibaca agar status terbaca dan path jadi "terbukti" untuk konfigurasi.
-  `${P}UserInterface.RemoteAccess.Enable`,
-  `${P}X_HW_Security.AclServices.HTTPWanEnable`,
 ];
 
 /** Keluarga vendor untuk memilih kandidat redaman yang dicoba lebih dulu. */
@@ -168,8 +164,6 @@ export const PATH_INFO_181: string[] = [
   'Device.DeviceInfo.MemoryStatus.Total',
   'Device.DeviceInfo.MemoryStatus.Free',
   'Device.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value',
-  // Remote management (akses WAN ke ONU) — standar TR-181.
-  'Device.UserInterface.RemoteAccess.Enable',
 ];
 
 export const PATH_OPTICAL_181: string[] = [

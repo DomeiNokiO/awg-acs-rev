@@ -682,17 +682,18 @@ function applyRemoteMgmt(ctx: CwmpContext, db: Database, deviceId: string, k: Kn
 
   const root = k.model === 'TR-181' ? 'Device.' : 'InternetGatewayDevice.';
   const plan = planRemoteAccess(evidence(k), root, { enable: req.enable, protocols, port });
-  if (plan.note) rep.skipped.push(plan.note);
   rep.guessed.push(...plan.guessed);
 
   const label = req.enable ? 'Remote management: aktifkan' : 'Remote management: nonaktifkan';
   const proven = plan.fills.filter((f) => f.proven).map(({ name, type, value }) => ({ name, type, value }));
   if (proven.length) queueWrite(ctx, db, deviceId, rep, proven, `${label} (terbukti)`, 'cfg_remote');
-  // Tebakan: satu per SPV — 9005 pada satu nama tidak membatalkan sisanya.
+  // Belum terbukti: satu per SPV — 9005 pada satu nama tidak membatalkan sisanya.
   for (const f of plan.fills.filter((f) => !f.proven)) {
     queueWrite(ctx, db, deviceId, rep, [{ name: f.name, type: f.type, value: f.value }], `${label}: ${f.name.split('.').slice(-2).join('.')}`, 'cfg_remote');
   }
-  if (!rep.queued) rep.skipped.push('Tidak ada parameter remote management yang bisa ditulis');
+  // Catatan informatif saat ada yang diantre; jadi alasan gagal bila tidak.
+  if (plan.note) (rep.queued ? rep.plan : rep.skipped).push(plan.note);
+  if (!rep.queued && !plan.note) rep.skipped.push('Tidak ada parameter remote management yang bisa ditulis');
 }
 
 function applyWanDelete(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {

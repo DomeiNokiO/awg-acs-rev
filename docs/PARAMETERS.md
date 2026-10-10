@@ -177,21 +177,29 @@ tersembunyi.
 
 ## 6. Remote management (akses WAN ke ONU)
 
-Membuka manajemen ONU dari sisi WAN. Lintas vendor lewat standar TR-069,
-plus ACL per protokol untuk Huawei.
+Membuka manajemen ONU (web GUI / Telnet / SSH) dari sisi WAN. ONU GPON
+umumnya **tidak** mengenal `UserInterface.RemoteAccess` standar (balas Fault
+9003), jadi dipakai parameter per keluarga vendor yang terbukti di lapangan.
+Sumber: provision GenieACS komunitas ISP (safrinnetwork, beryindo, alijayanet).
 
-| Parameter | Tipe | Keterangan |
-|-----------|------|------------|
-| `…UserInterface.RemoteAccess.Enable` | bool | Standar TR-098/TR-181 — jalur universal (root `InternetGatewayDevice.` atau `Device.`) |
-| `…UserInterface.RemoteAccess.Port` | unsignedInt | Port web GUI di WAN (ditulis bila terbukti ada) |
-| `…UserInterface.RemoteAccess.Protocol` | string (enum) | `HTTP`/`HTTPS`/… — ditulis bila terbukti ada (enum beda antar firmware) |
-| `InternetGatewayDevice.X_HW_Security.AclServices.HTTPWanEnable` | bool | Huawei — web GUI HTTP dari WAN |
-| `…AclServices.HTTPSWanEnable` / `TELNETWanEnable` / `SSHWanEnable` / `PINGWanEnable` | bool | Huawei — per protokol |
-| `…AclServices.HTTPWanPort` | unsignedInt | Huawei — port web GUI WAN |
+| Vendor | Parameter | Tipe | Nilai aktif |
+|--------|-----------|------|-------------|
+| Huawei | `X_HW_Security.AclServices.HTTPWanEnable` | bool | `true` (web GUI) |
+| Huawei | `…AclServices.{HTTPS,TELNET,SSH}WanEnable` | bool | `true` per protokol |
+| Huawei | `X_HW_Security.X_HW_FirewallLevel` | string | `Custom` (wajib; tanpa ini WAN tetap diblokir) |
+| Huawei | `X_HW_Security.Dosfilter.IcmpEchoReplyEn` | string | `1` = balas ping |
+| FiberHome | `X_FH_FireWall.REMOTEACCEnable` | bool | `true` (master remote) |
+| FiberHome | `X_FH_Remoteweblogin.webloginenable` | string | `1` (web GUI) |
+| FiberHome | `X_FH_ACL.Enable` | unsignedInt | `1` |
+| ZTE | `Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.Enable` | bool | `true` |
+| ZTE | `…IPV4ServiceControl.1.Ingress` | string | `WAN_ALL` |
+| ZTE | `…IPV4ServiceControl.1.ServiceType` | string | `HTTP` |
+| Standar | `…UserInterface.RemoteAccess.Enable/Port/Protocol` | — | hanya bila terbukti ada |
 
-Path terbukti diantre sekaligus; tebakan diantre satu per SPV (9005 pada satu
-nama tidak menggagalkan sisanya). Vendor non-Huawei tanpa path khusus memakai
-standar `UserInterface.RemoteAccess`.
+Keluarga vendor ditentukan dari bukti path WAN (`detectFamily`): ONU satu merek
+tidak pernah dikirim parameter merek lain. Path terbukti diantre sekaligus;
+sisanya satu per SPV (9005 pada satu nama tidak menggagalkan yang lain). ZTE
+butuh `IPV4ServiceControl.1` sudah ada (kalau belum, buat via AddObject).
 
 ---
 

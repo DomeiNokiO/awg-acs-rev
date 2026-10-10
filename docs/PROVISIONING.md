@@ -220,32 +220,31 @@ tidak ada yang diantrekan → HTTP 400 dengan `error` berisi alasannya.
 
 ### Remote management (akses WAN ke ONU) — `planRemoteAccess`
 
-Membuka akses manajemen ONU (web GUI / Telnet / SSH / Ping) dari sisi WAN,
-berlaku **semua vendor** lewat dua lapis yang dipilih dari bukti path:
+Membuka/menutup akses manajemen ONU (web GUI / Telnet / SSH / Ping) dari sisi
+WAN. **ONU GPON umumnya TIDAK mengimplementasi `UserInterface.RemoteAccess`
+standar** dan menolaknya dengan **Fault 9003** — jadi parameter dipilih per
+**keluarga vendor** dari set yang terbukti dipakai di lapangan (provision
+GenieACS komunitas ISP: safrinnetwork, beryindo, alijayanet, yang menyepakati
+set sama):
 
-1. **Standar TR-069 `UserInterface.RemoteAccess`** — jalur universal.
-   `Enable` (bool) selalu dicoba; `Port` & `Protocol` hanya ditulis bila
-   terbukti ada (`Protocol` adalah enum yang nilainya berbeda antar firmware,
-   menebaknya berisiko 9007). Root mengikuti data model:
-   `InternetGatewayDevice.` (TR-098) atau `Device.` (TR-181).
-2. **Huawei `X_HW_Security.AclServices.*WanEnable`** (TR-098) — satu boolean
-   per protokol (`HTTP`, `HTTPS`, `TELNET`, `SSH`, `PING`) plus `HTTPWanPort`.
-   Dipakai bila terbukti ada, atau bila keluarga = huawei (lalu dilaporkan
-   `guessed`). Satu leaf terbukti → seluruh objek ACL dianggap ada (sekerabat,
-   firmware sama), jadi tidak semua ditebak satu per satu.
+| Keluarga | Parameter (nilai saat AKTIF) |
+|----------|------------------------------|
+| **Huawei** | `X_HW_Security.AclServices.{HTTP,HTTPS,TELNET,SSH}WanEnable=true`, `X_HW_Security.X_HW_FirewallLevel="Custom"` (wajib — tanpa ini firewall tetap blokir WAN), `…Dosfilter.IcmpEchoReplyEn` untuk ping |
+| **FiberHome** | `X_FH_FireWall.REMOTEACCEnable=true`, `X_FH_Remoteweblogin.webloginenable="1"` (web GUI), `X_FH_ACL.Enable=1` |
+| **ZTE** | `Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.{Enable=true, Ingress="WAN_ALL", ServiceType="HTTP"}` (butuh instance 1 ada; bila belum, buat lewat AddObject) |
+| **Standar TR-069** | `UserInterface.RemoteAccess.Enable/Port/Protocol` — **hanya** ditulis bila terbukti ada di perangkat (menghindari 9003) |
 
-Aturan sama seperti VLAN/binding: path **terbukti** diantre dalam satu SPV
-(pasti berlaku); path **tebakan** diantre **satu per SPV**, sehingga nama yang
-salah hanya menggagalkan dirinya (9005), bukan seluruh batch. Saat `enable`
-tanpa memilih protokol, default membuka web GUI (`http`+`https`). Path
-`UserInterface.RemoteAccess.Enable` dan `X_HW_Security.AclServices.HTTPWanEnable`
-ikut dibaca di path esensial (`modelpaths.ts`) agar statusnya terbaca dan
-menjadi bukti untuk konfigurasi berikutnya.
+Keluarga ditentukan dari bukti path WAN (`detectFamily`), jadi ONU Huawei tidak
+pernah dikirim parameter FiberHome/ZTE dan sebaliknya. Path yang **terbukti**
+ada di unit itu diantre satu batch; sisanya (path standar-lapangan yang belum
+terkonfirmasi di unit) diantre **satu per SPV**, sehingga nama yang tidak
+didukung (9005) hanya menggagalkan dirinya, bukan seluruh batch. Saat `enable`
+tanpa memilih protokol, default membuka web GUI (`http`+`https`).
 
 > Keamanan: membuka manajemen ke internet memperbesar permukaan serangan.
 > Batasi sumber IP di firewall OLT dan matikan protokol yang tidak dipakai.
-> Parameter vendor non-Huawei yang belum punya path standar bisa diisi lewat
-> tab Perintah → SetParameterValues.
+> Parameter vendor lain (CMCC/CT-COM/CU/Nokia) yang belum terdata diisi lewat
+> tab Perintah → SetParameterValues atau kolom "Parameter tambahan".
 
 ### Pengetahuan vendor WAN (`vendorwan.ts`)
 

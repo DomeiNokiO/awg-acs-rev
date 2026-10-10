@@ -99,27 +99,34 @@ await settle(zcm, acs.cwmp, '6 CONNECTION REQUEST');
 const zcLink = `${W}${zc.wcd}.X_CMCC_WANGponLinkConfig.VLANIDMark`;
 t.check(zcm.V.get(zcLink) === '600' && !zcm.errors.length, `ZTE firmware CMCC: VLAN 600 di X_CMCC_WANGponLinkConfig, tanpa fault`);
 
-// Remote management (akses WAN ke ONU) — lintas vendor.
+// Remote management (akses WAN ke ONU) — parameter vendor lapangan.
 const P = 'InternetGatewayDevice.';
-const RA = `${P}UserInterface.RemoteAccess.Enable`;
+// Huawei: ACL per protokol + FirewallLevel=Custom (buka HTTP+Telnet+SSH).
 const ACL = `${P}X_HW_Security.AclServices.`;
-// Huawei: standar RemoteAccess + ACL per protokol; buka HTTP/HTTPS/Ping.
-r = await acs.call('POST', `/api/devices/${idOf(hw)}/config`, { type: 'remote-mgmt', enable: true, protocols: ['http', 'https', 'ping'], port: 8443 });
-t.check(r.status === 200 && !r.body.guessed.length, `Huawei remote-mgmt tanpa tebakan (${r.body.plan.join('; ')})`);
+r = await acs.call('POST', `/api/devices/${idOf(hw)}/config`, { type: 'remote-mgmt', enable: true, protocols: ['http', 'telnet', 'ssh'] });
+t.check(r.status === 200 && r.body.plan.join(' ').includes('HTTPWanEnable'), `Huawei remote-mgmt diantre (${r.body.plan.join('; ')})`);
 await settle(hw, acs.cwmp, '6 CONNECTION REQUEST');
-t.check(hw.V.get(RA) === 'true' && hw.V.get(`${ACL}HTTPWanEnable`) === 'true' && hw.V.get(`${ACL}HTTPSWanEnable`) === 'true'
-  && hw.V.get(`${ACL}PINGWanEnable`) === 'true' && hw.V.get(`${ACL}TELNETWanEnable`) === 'false' && hw.V.get(`${ACL}SSHWanEnable`) === 'false'
-  && hw.V.get(`${ACL}HTTPWanPort`) === '8443' && !hw.errors.length,
-  `Huawei: RemoteAccess + ACL per protokol diset (HTTP/HTTPS/Ping on, Telnet/SSH off, port 8443)`);
+t.check(hw.V.get(`${ACL}HTTPWanEnable`) === 'true' && hw.V.get(`${ACL}TELNETWanEnable`) === 'true' && hw.V.get(`${ACL}SSHWanEnable`) === 'true'
+  && hw.V.get(`${ACL}HTTPSWanEnable`) === 'false' && hw.V.get(`${P}X_HW_Security.X_HW_FirewallLevel`) === 'Custom' && !hw.errors.length,
+  'Huawei: HTTP/Telnet/SSH WanEnable=true, HTTPS=false, FirewallLevel=Custom');
 
-// ZTE: tanpa ACL Huawei → hanya standar RemoteAccess, tetap tanpa tebakan.
+// FiberHome: firewall remote + web login.
+r = await acs.call('POST', `/api/devices/${idOf(fh)}/config`, { type: 'remote-mgmt', enable: true, protocols: ['http'] });
+t.check(r.status === 200 && r.body.plan.join(' ').includes('REMOTEACCEnable'), `FiberHome remote-mgmt diantre`);
+await settle(fh, acs.cwmp, '6 CONNECTION REQUEST');
+t.check(fh.V.get(`${P}X_FH_FireWall.REMOTEACCEnable`) === 'true' && fh.V.get(`${P}X_FH_Remoteweblogin.webloginenable`) === '1'
+  && fh.V.get(`${P}X_FH_ACL.Enable`) === '1' && !fh.errors.length,
+  'FiberHome: REMOTEACCEnable=true, webloginenable=1, X_FH_ACL.Enable=1');
+
+// ZTE: ServiceControl instance 1 (web), lalu nonaktif.
+const ZR = `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`;
 r = await acs.call('POST', `/api/devices/${idOf(zte)}/config`, { type: 'remote-mgmt', enable: true, protocols: ['http'] });
-t.check(r.status === 200 && !r.body.guessed.length && !r.body.plan.join(' ').includes('X_HW_'), `ZTE remote-mgmt lewat standar TR-069 saja`);
+t.check(r.status === 200 && !r.body.plan.join(' ').includes('X_HW_'), `ZTE remote-mgmt tanpa parameter Huawei`);
 await settle(zte, acs.cwmp, '6 CONNECTION REQUEST');
-t.check(zte.V.get(RA) === 'true' && !zte.errors.length, 'ZTE: RemoteAccess.Enable=true');
-// Nonaktifkan lagi.
+t.check(zte.V.get(`${ZR}Enable`) === 'true' && zte.V.get(`${ZR}Ingress`) === 'WAN_ALL' && zte.V.get(`${ZR}ServiceType`) === 'HTTP' && !zte.errors.length,
+  'ZTE: ServiceControl.1 Enable=true, Ingress=WAN_ALL, ServiceType=HTTP');
 await acs.call('POST', `/api/devices/${idOf(zte)}/config`, { type: 'remote-mgmt', enable: false });
 await settle(zte, acs.cwmp, '6 CONNECTION REQUEST');
-t.check(zte.V.get(RA) === 'false', 'ZTE: RemoteAccess.Enable=false (nonaktif)');
+t.check(zte.V.get(`${ZR}Enable`) === 'false', 'ZTE: ServiceControl.1.Enable=false (nonaktif)');
 
 t.done(acs);

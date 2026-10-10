@@ -12,6 +12,35 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0m. Remote management: parameter vendor lapangan (perbaikan 9003)
+
+- **Penyebab:** versi awal (0l) memakai standar TR-069
+  `UserInterface.RemoteAccess.*` sebagai jalur utama. ONU GPON umumnya tidak
+  mengimplementasikannya dan membalas **Fault 9003** (Invalid arguments) —
+  remote tidak pernah benar-benar terbuka.
+- **Perbaikan:** `planRemoteAccess` ditulis ulang memakai parameter **per
+  keluarga vendor** yang terbukti dipakai di lapangan (provision GenieACS
+  komunitas: safrinnetwork, beryindo, alijayanet — set yang sama):
+  - **Huawei:** `X_HW_Security.AclServices.{HTTP,HTTPS,TELNET,SSH}WanEnable`
+    + `X_HW_Security.X_HW_FirewallLevel="Custom"` (wajib; tanpa ini firewall
+    tetap memblokir WAN) + `Dosfilter.IcmpEchoReplyEn` untuk ping.
+  - **FiberHome:** `X_FH_FireWall.REMOTEACCEnable` +
+    `X_FH_Remoteweblogin.webloginenable` (web GUI) + `X_FH_ACL.Enable`.
+  - **ZTE:** `Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`
+    `{Enable, Ingress="WAN_ALL", ServiceType="HTTP"}`.
+  - Standar `UserInterface.RemoteAccess` hanya ditulis bila **terbukti** ada.
+- Keluarga ditentukan dari bukti path WAN (`detectFamily`) → ONU satu merek
+  tidak pernah dikirim parameter merek lain. Path belum-terkonfirmasi dikirim
+  **satu per SPV** (9005 pada satu nama tidak menggagalkan sisanya) dan tidak
+  lagi dialarmkan sebagai "tebakan" selama keluarga vendornya cocok.
+- **File:** `vendorwan.ts` (`planRemoteAccess` ditulis ulang), `configure.ts`
+  (`applyRemoteMgmt` — note informatif, bukan error, saat ada yang diantre),
+  `modelpaths.ts` (probe lintas-vendor di path esensial dibatalkan demi
+  menjaga beban ONU), `Configurator.tsx` (teks bantuan), `sim.mjs`+`wan.mjs`
+  (uji Huawei ACL+FirewallLevel, FiberHome REMOTEACC+webapi, ZTE ServiceControl).
+
+---
+
 ## 0l. Remote management ONU (akses WAN) — semua vendor
 
 - **Fitur baru:** satu tombol di **Konfigurasi → Perangkat** untuk

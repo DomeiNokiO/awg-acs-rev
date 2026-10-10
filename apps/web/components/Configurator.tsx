@@ -355,8 +355,10 @@ export function Configurator({ deviceId, serial, insight, caps, preset, onQueued
               <div className="small fw-semibold mb-1"><i className="fa-solid fa-tower-broadcast text-primary me-1" />Remote Management (akses WAN ke ONU)</div>
               <div className="small text-muted mb-2">
                 Membuka akses manajemen ONU (web GUI / Telnet / SSH) dari sisi WAN untuk semua vendor.
-                ACS memilih parameternya otomatis: standar TR-069 <code>UserInterface.RemoteAccess</code>,
-                plus ACL <code>X_HW_Security</code> untuk Huawei. <span className="text-warning">Hati-hati: membuka manajemen ke internet memperbesar permukaan serangan — batasi di firewall OLT.</span>
+                ACS memilih parameternya otomatis per keluarga vendor: Huawei <code>X_HW_Security.AclServices</code> + FirewallLevel,
+                FiberHome <code>X_FH_FireWall</code>/<code>X_FH_Remoteweblogin</code>, ZTE <code>X_ZTE-COM_ServiceControl</code>.
+                Parameter dikirim satu per satu agar yang tidak didukung tidak menggagalkan sisanya — pantau hasilnya di tab Peristiwa.
+                <span className="text-warning"> Hati-hati: membuka manajemen ke internet memperbesar permukaan serangan — batasi IP sumber di firewall OLT.</span>
               </div>
               <div className="d-flex flex-wrap align-items-center gap-2 mb-2" role="group" aria-label="Protokol remote">
                 {([['http', 'HTTP'], ['https', 'HTTPS'], ['telnet', 'Telnet'], ['ssh', 'SSH'], ['ping', 'Ping']] as const).map(([k, label]) => (

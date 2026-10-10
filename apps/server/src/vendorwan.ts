@@ -263,66 +263,98 @@ export interface RemoteFill extends Fill { proven: boolean }
 export interface RemotePlan { fills: RemoteFill[]; guessed: string[]; note?: string }
 
 /**
- * Rencana membuka/menutup remote management untuk SEMUA vendor.
+ * Rencana membuka/menutup remote management (akses WAN ke ONU) untuk SEMUA
+ * vendor, berbasis parameter yang TERBUKTI dipakai di lapangan (bukan standar
+ * `UserInterface.RemoteAccess` yang kebanyakan ONU GPON tolak dengan Fault
+ * 9003). Sumber: provision GenieACS komunitas ISP (safrinnetwork, beryindo,
+ * alijayanet) yang menyepakati set yang sama.
  *
- * Dua lapis, dipilih dari bukti path:
- *  1. Standar TR-069 `UserInterface.RemoteAccess.Enable/Port/Protocol`
- *     (berlaku TR-098 `InternetGatewayDevice.` dan TR-181 `Device.`) —
- *     inilah jalur universal lintas merek.
- *  2. Huawei `X_HW_Security.AclServices.*WanEnable` (per protokol) — hanya
- *     TR-098, dipakai bila terbukti ada atau keluarga = huawei.
+ * | Keluarga  | Parameter unlock (nilai saat AKTIF)                               |
+ * |-----------|------------------------------------------------------------------|
+ * | Huawei    | X_HW_Security.AclServices.{HTTP,HTTPS,TELNET,SSH}WanEnable=true,  |
+ * |           | X_HW_Security.X_HW_FirewallLevel="Custom", Dosfilter ping        |
+ * | FiberHome | X_FH_FireWall.REMOTEACCEnable=true, X_FH_Remoteweblogin.         |
+ * |           | webloginenable="1", X_FH_ACL.Enable=1                            |
+ * | ZTE       | Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.          |
+ * |           | {Enable=true, Ingress="WAN_ALL", ServiceType="HTTP"}            |
  *
- * `root` = `InternetGatewayDevice.` atau `Device.` (berakhiran titik).
- * Nama yang TERBUKTI ada selalu dipakai; tebakan keluarga ditandai `guessed`
- * supaya operator tahu bila perangkat mungkin menolaknya (SPV atomik → path
- * guessed diantre satu per SPV di configure.ts, tidak menggagalkan yang lain).
+ * `root` = `InternetGatewayDevice.` atau `Device.`. Path TERBUKTI diantre
+ * sekaligus; path tebakan (`guessed`) diantre satu per SPV di configure.ts,
+ * sehingga nama yang salah (9005) tidak menggagalkan yang lain.
  */
 export function planRemoteAccess(e: Evidence, root: string, o: RemoteAccessOptions): RemotePlan {
   const out: RemotePlan = { fills: [], guessed: [] };
-  // `proven` boleh dipaksa: leaf sekerabat dalam satu objek (mis. semua
-  // `AclServices.*WanEnable`) hidup/mati bersama firmware-nya — bila salah
-  // satu terbukti ada, sisanya ada juga, jadi tidak perlu ditebak.
-  const add = (name: string, type: XsdType, value: string, proven: boolean): void => {
+  // `proven` = terbukti ada di unit ini → boleh dikirim satu batch; bila belum,
+  // path tetap dikirim (satu per SPV di configure.ts) tetapi TIDAK dilaporkan
+  // sebagai tebakan selama ia path standar-lapangan untuk keluarga vendor yang
+  // sudah terdeteksi — hanya dicatat sekali lewat `out.note` bila semua belum
+  // terbukti. `speculative` khusus untuk nilai yang benar-benar tebakan.
+  const add = (name: string, type: XsdType, value: string, proven: boolean, speculative = false): void => {
+    if (out.fills.some((f) => f.name === name)) return;
     out.fills.push({ name, type, value, proven });
-    if (!proven) out.guessed.push(name);
+    if (!proven && speculative) out.guessed.push(name);
   };
   const b = (v: boolean) => (v ? 'true' : 'false');
+  const on = o.enable;
 
-  // --- Lapis 1: standar UserInterface.RemoteAccess (universal) ---
+  // --- Standar TR-069: HANYA bila terbukti ada (ONU GPON umumnya 9003) ---
   const ra = `${root}UserInterface.RemoteAccess.`;
-  const raEnable = `${ra}Enable`;
-  // Enable standar selalu dicoba — ini path TR-069 resmi yang paling luas
-  // didukung. Bila tak terbukti, tetap diantre sebagai tebakan.
-  add(raEnable, e.typeFor(raEnable, 'xsd:boolean'), b(o.enable), e.exists(raEnable));
-  if (o.enable) {
-    // Port & Protocol hanya ditulis bila terbukti ada: Protocol adalah enum
-    // (HTTP/HTTPS/Telnet) yang nilainya berbeda antar firmware — menebaknya
-    // berisiko 9007 dan menggagalkan batch.
-    if (o.port && e.exists(`${ra}Port`)) add(`${ra}Port`, e.typeFor(`${ra}Port`, 'xsd:unsignedInt'), String(o.port), true);
-    if (e.exists(`${ra}Protocol`)) {
-      add(`${ra}Protocol`, 'xsd:string', o.protocols.https && !o.protocols.http ? 'HTTPS' : 'HTTP', true);
+  if (e.exists(`${ra}Enable`)) {
+    add(`${ra}Enable`, e.typeFor(`${ra}Enable`, 'xsd:boolean'), b(on), true);
+    if (on && o.port && e.exists(`${ra}Port`)) add(`${ra}Port`, e.typeFor(`${ra}Port`, 'xsd:unsignedInt'), String(o.port), true);
+    if (on && e.exists(`${ra}Protocol`)) add(`${ra}Protocol`, 'xsd:string', o.protocols.https && !o.protocols.http ? 'HTTPS' : 'HTTP', true);
+  }
+
+  // Parameter vendor hanya ada di pohon TR-098.
+  if (root !== 'InternetGatewayDevice.') {
+    if (!out.fills.length) out.note = 'Remote management TR-181 belum didukung — isi lewat "Parameter tambahan".';
+    return out;
+  }
+  const P = root;
+
+  // --- Huawei: ACL per protokol + FirewallLevel wajib "Custom" ---
+  const acl = `${P}X_HW_Security.AclServices.`;
+  const hwProven = e.exists(`${acl}HTTPWanEnable`) || e.exists(`${acl}TELNETWanEnable`);
+  if (hwProven || e.family === 'huawei') {
+    const pr = hwProven;
+    const map: [string, boolean][] = [
+      ['HTTPWanEnable', o.protocols.http], ['HTTPSWanEnable', o.protocols.https],
+      ['TELNETWanEnable', o.protocols.telnet], ['SSHWanEnable', o.protocols.ssh],
+    ];
+    for (const [leaf, want] of map) add(`${acl}${leaf}`, 'xsd:boolean', b(on && want), pr);
+    // Tanpa FirewallLevel=Custom, akses WAN tetap diblokir firewall Huawei.
+    if (on) add(`${P}X_HW_Security.X_HW_FirewallLevel`, 'xsd:string', 'Custom', pr);
+    // Ping ke IP WAN: IcmpEchoReplyEn (1 = balas). Hanya saat diminta.
+    if (o.protocols.ping) add(`${P}X_HW_Security.Dosfilter.IcmpEchoReplyEn`, 'xsd:string', on ? '1' : '0', e.exists(`${P}X_HW_Security.Dosfilter.IcmpEchoReplyEn`));
+  }
+
+  // --- FiberHome: firewall remote + web login + ACL ---
+  const fhMaster = `${P}X_FH_FireWall.REMOTEACCEnable`;
+  const fhProven = e.exists(fhMaster);
+  if (fhProven || e.family === 'fiberhome') {
+    const pr = fhProven;
+    add(fhMaster, 'xsd:boolean', b(on), pr);
+    // Web GUI (HTTP) khusus FiberHome; nilai string "1"/"0".
+    add(`${P}X_FH_Remoteweblogin.webloginenable`, 'xsd:string', on && (o.protocols.http || o.protocols.https) ? '1' : '0', e.exists(`${P}X_FH_Remoteweblogin.webloginenable`));
+    if (on) add(`${P}X_FH_ACL.Enable`, e.typeFor(`${P}X_FH_ACL.Enable`, 'xsd:unsignedInt'), '1', e.exists(`${P}X_FH_ACL.Enable`));
+  }
+
+  // --- ZTE: ServiceControl instance 1 (web). Butuh instance ada. ---
+  const zteBase = `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`;
+  const zteProven = e.exists(`${zteBase}Enable`);
+  if (zteProven || e.family === 'zte') {
+    const pr = zteProven;
+    add(`${zteBase}Enable`, 'xsd:boolean', b(on), pr);
+    if (on) {
+      add(`${zteBase}Ingress`, 'xsd:string', 'WAN_ALL', pr);
+      add(`${zteBase}ServiceType`, 'xsd:string', o.protocols.https && !o.protocols.http ? 'HTTPS' : 'HTTP', pr);
     }
   }
 
-  // --- Lapis 2: Huawei X_HW_Security.AclServices (per protokol, TR-098) ---
-  if (root === 'InternetGatewayDevice.') {
-    const acl = `${root}X_HW_Security.AclServices.`;
-    // Satu leaf terbukti → seluruh objek ACL ada (sekerabat, firmware sama).
-    const aclProven = e.exists(`${acl}HTTPWanEnable`) || e.exists(`${acl}HTTPSWanEnable`);
-    const useHw = aclProven || e.family === 'huawei';
-    if (useHw) {
-      const wan: [string, boolean][] = [
-        ['HTTPWanEnable', o.protocols.http], ['HTTPSWanEnable', o.protocols.https],
-        ['TELNETWanEnable', o.protocols.telnet], ['SSHWanEnable', o.protocols.ssh],
-        ['PINGWanEnable', o.protocols.ping],
-      ];
-      for (const [leaf, on] of wan) add(`${acl}${leaf}`, 'xsd:boolean', b(o.enable && on), aclProven);
-      if (o.enable && o.port) add(`${acl}HTTPWanPort`, e.typeFor(`${acl}HTTPWanPort`, 'xsd:unsignedInt'), String(o.port), aclProven);
-    }
-  }
-
-  if (!out.fills.some((f) => f.proven)) {
-    out.note = 'Parameter remote management perangkat ini belum terbukti — nilai dikirim sebagai tebakan; bila ditolak, isi lewat "Parameter tambahan" atau set di OLT.';
+  if (!out.fills.length) {
+    out.note = 'Parameter remote management perangkat ini belum diketahui — isi lewat "Parameter tambahan" atau set di OLT.';
+  } else if (!out.fills.some((f) => f.proven)) {
+    out.note = 'Parameter remote dikirim satu per satu (belum terkonfirmasi di unit ini) — path standar-lapangan untuk keluarga vendornya. Pantau hasil per parameter di tab Peristiwa/Antrean Tugas.';
   }
   return out;
 }

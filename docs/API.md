@@ -163,7 +163,7 @@ perangkat; tebakan dilaporkan di `guessed`.
 | `wan-enable` | `target`, `enable` | aktif/nonaktifkan koneksi WAN |
 | `wan-bind` | `target`, `bindLan` [1-8], `bindSsid` [1-8] | binding port koneksi yang ada (`X_FH_LanInterface` / `X_*_LanInterface` daftar objek, `X_HW_LANBIND.*Enable`). Daftar kosong = lepas binding |
 | `inform-interval` | `informInterval` (60–86400 detik) | `PeriodicInformEnable=true` + `PeriodicInformInterval` |
-| `remote-mgmt` | `enable` (bool), `protocols?` (`http`/`https`/`telnet`/`ssh`/`ping`), `port?` (1–65535) | buka/tutup akses manajemen ONU dari WAN, lintas vendor: standar `UserInterface.RemoteAccess.Enable/Port/Protocol` + ACL Huawei `X_HW_Security.AclServices.*WanEnable`/`HTTPWanPort`. `enable:false` menutup; `protocols` kosong saat enable = `http`+`https` |
+| `remote-mgmt` | `enable` (bool), `protocols?` (`http`/`https`/`telnet`/`ssh`/`ping`), `port?` (1–65535) | buka/tutup akses manajemen ONU dari WAN, parameter per keluarga vendor (lapangan): Huawei `X_HW_Security.AclServices.*WanEnable`+`X_HW_FirewallLevel=Custom`, FiberHome `X_FH_FireWall.REMOTEACCEnable`+`X_FH_Remoteweblogin.webloginenable`, ZTE `X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.*`. Standar `UserInterface.RemoteAccess` hanya bila terbukti (GPON umumnya tolak 9003). `enable:false` menutup; `protocols` kosong saat enable = `http`+`https` |
 
 `GET /api/devices/:id` → `insight.wcds[]` (WCD yang ada, termasuk kosong),
 `insight.connTypes` (ConnectionType yang dipakai perangkat), `insight.wan[].binding`

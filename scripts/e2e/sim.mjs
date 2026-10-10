@@ -60,14 +60,22 @@ export function makeDevice(vendor, serial, opts = {}) {
   put(`${P}LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase`, opts.wifiPass ?? '');
   put(`${P}LANDevice.1.WLANConfiguration.1.Enable`, 'true');
   put(`${P}LANDevice.1.WLANConfiguration.1.SSIDAdvertisementEnabled`, 'true');
-  // Remote management: standar TR-069 untuk semua, ACL Huawei untuk Huawei.
-  put(`${P}UserInterface.RemoteAccess.Enable`, 'false');
-  put(`${P}UserInterface.RemoteAccess.Port`, '8080');
+  // Remote management (akses WAN ke ONU) — parameter per vendor sesuai lapangan.
   if (vendor === 'huawei') {
-    for (const leaf of ['HTTPWanEnable', 'HTTPSWanEnable', 'TELNETWanEnable', 'SSHWanEnable', 'PINGWanEnable']) {
+    for (const leaf of ['HTTPWanEnable', 'HTTPSWanEnable', 'TELNETWanEnable', 'SSHWanEnable']) {
       put(`${P}X_HW_Security.AclServices.${leaf}`, 'false');
     }
-    put(`${P}X_HW_Security.AclServices.HTTPWanPort`, '80');
+    put(`${P}X_HW_Security.X_HW_FirewallLevel`, 'High');
+    put(`${P}X_HW_Security.Dosfilter.IcmpEchoReplyEn`, '0');
+  } else if (vendor === 'fiberhome') {
+    put(`${P}X_FH_FireWall.REMOTEACCEnable`, 'false');
+    put(`${P}X_FH_Remoteweblogin.webloginenable`, '0');
+    put(`${P}X_FH_ACL.Enable`, '0');
+  } else if (vendor === 'zte') {
+    const zr = `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`;
+    put(`${zr}Enable`, 'false');
+    put(`${zr}Ingress`, 'LAN_ALL');
+    put(`${zr}ServiceType`, 'HTTP');
   }
   if (vendor === 'zte') {
     put(`${ppp}X_ZTE-COM_VLANID`, '100');
