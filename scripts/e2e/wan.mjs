@@ -129,4 +129,13 @@ await acs.call('POST', `/api/devices/${idOf(zte)}/config`, { type: 'remote-mgmt'
 await settle(zte, acs.cwmp, '6 CONNECTION REQUEST');
 t.check(zte.V.get(`${ZR}Enable`) === 'false', 'ZTE: ServiceControl.1.Enable=false (nonaktif)');
 
+// ZTE tanpa instance ServiceControl → ACS AddObject dulu, lalu isi (one-shot).
+const zte2 = makeDevice('zte', 'ZTEG0003', { strictEnd: true, zteNoRemote: true });
+await settle(zte2, acs.cwmp);
+r = await acs.call('POST', `/api/devices/${idOf(zte2)}/config`, { type: 'remote-mgmt', enable: true, protocols: ['http'] });
+t.check(r.status === 200 && r.body.plan.join(' ').includes('AddObject'), `ZTE auto-create ServiceControl diantre (${r.body.plan.join('; ')})`);
+await settle(zte2, acs.cwmp, '6 CONNECTION REQUEST');
+t.check(zte2.V.get(`${ZR}Enable`) === 'true' && zte2.V.get(`${ZR}ServiceType`) === 'HTTP' && zte2.V.get(`${ZR}Ingress`) === 'WAN_ALL' && !zte2.errors.length,
+  'ZTE: instance ServiceControl dibuat & diisi (Enable=true, ServiceType=HTTP, Ingress=WAN_ALL)');
+
 t.done(acs);

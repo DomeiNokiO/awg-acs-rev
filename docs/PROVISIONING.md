@@ -231,20 +231,29 @@ set sama):
 |----------|------------------------------|
 | **Huawei** | `X_HW_Security.AclServices.{HTTP,HTTPS,TELNET,SSH}WanEnable=true`, `X_HW_Security.X_HW_FirewallLevel="Custom"` (wajib — tanpa ini firewall tetap blokir WAN), `…Dosfilter.IcmpEchoReplyEn` untuk ping |
 | **FiberHome** | `X_FH_FireWall.REMOTEACCEnable=true`, `X_FH_Remoteweblogin.webloginenable="1"` (web GUI), `X_FH_ACL.Enable=1` |
-| **ZTE** | `Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.{Enable=true, Ingress="WAN_ALL", ServiceType="HTTP"}` (butuh instance 1 ada; bila belum, buat lewat AddObject) |
+| **ZTE** | `Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.{Enable=true, Ingress="WAN_ALL", ServiceType="HTTP"}`. Bila instance 1 **belum ada**, ACS otomatis `AddObject …IPV4ServiceControl.` lalu mengisinya (sekali klik) |
 | **Standar TR-069** | `UserInterface.RemoteAccess.Enable/Port/Protocol` — **hanya** ditulis bila terbukti ada di perangkat (menghindari 9003) |
 
-Keluarga ditentukan dari bukti path WAN (`detectFamily`), jadi ONU Huawei tidak
-pernah dikirim parameter FiberHome/ZTE dan sebaliknya. Path yang **terbukti**
-ada di unit itu diantre satu batch; sisanya (path standar-lapangan yang belum
-terkonfirmasi di unit) diantre **satu per SPV**, sehingga nama yang tidak
-didukung (9005) hanya menggagalkan dirinya, bukan seluruh batch. Saat `enable`
-tanpa memilih protokol, default membuka web GUI (`http`+`https`).
+Keluarga ditentukan dari bukti path WAN (`detectFamily`):
+
+- **Huawei / FiberHome / ZTE** (terdeteksi) → hanya skema keluarganya.
+- **CMCC** (firmware China di hardware ZTE) → skema ZTE.
+- **CT-COM / CU / Nokia / belum terdeteksi** → "coba semua" (Huawei + FiberHome
+  + ZTE). Aman karena tiap path dikirim **satu per SPV**: yang tak didukung
+  gagal sendiri (9005), tidak menggagalkan yang lain.
+
+Master toggle tiap keluarga (`X_HW_Security.AclServices.HTTPWanEnable`,
+`X_FH_FireWall.REMOTEACCEnable`, ZTE `…IPV4ServiceControl.1.Enable`) ikut dibaca
+di path esensial — seperti kandidat redaman: yang tak ada ditandai invalid
+sekali lalu tak dikirim lagi. Efeknya: status remote terbaca, path yang cocok
+jadi "terbukti" (ditulis satu batch), dan ACS tahu instance ZTE sudah ada
+sehingga tidak membuat aturan ServiceControl duplikat. Saat `enable` tanpa
+memilih protokol, default membuka web GUI (`http`+`https`).
 
 > Keamanan: membuka manajemen ke internet memperbesar permukaan serangan.
 > Batasi sumber IP di firewall OLT dan matikan protokol yang tidak dipakai.
-> Parameter vendor lain (CMCC/CT-COM/CU/Nokia) yang belum terdata diisi lewat
-> tab Perintah → SetParameterValues atau kolom "Parameter tambahan".
+> Nokia dan ODM lain yang semua skemanya ditolak: isi lewat tab Perintah →
+> SetParameterValues atau kolom "Parameter tambahan".
 
 ### Pengetahuan vendor WAN (`vendorwan.ts`)
 

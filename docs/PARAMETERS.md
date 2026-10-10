@@ -196,10 +196,13 @@ Sumber: provision GenieACS komunitas ISP (safrinnetwork, beryindo, alijayanet).
 | ZTE | `…IPV4ServiceControl.1.ServiceType` | string | `HTTP` |
 | Standar | `…UserInterface.RemoteAccess.Enable/Port/Protocol` | — | hanya bila terbukti ada |
 
-Keluarga vendor ditentukan dari bukti path WAN (`detectFamily`): ONU satu merek
-tidak pernah dikirim parameter merek lain. Path terbukti diantre sekaligus;
-sisanya satu per SPV (9005 pada satu nama tidak menggagalkan yang lain). ZTE
-butuh `IPV4ServiceControl.1` sudah ada (kalau belum, buat via AddObject).
+Keluarga vendor ditentukan dari bukti path WAN (`detectFamily`): Huawei/
+FiberHome/ZTE dapat skema keluarganya; CMCC → skema ZTE (hardware ZTE);
+CT-COM/CU/Nokia/tak terdeteksi → coba semua (satu per SPV, gagal terisolasi).
+Path terbukti diantre sekaligus. **ZTE:** bila `IPV4ServiceControl.1` belum ada,
+ACS otomatis `AddObject …IPV4ServiceControl.` lalu mengisinya — sekali klik.
+Master toggle tiap keluarga ikut dibaca (path esensial) agar status terbaca dan
+ACS tak membuat aturan ServiceControl ZTE duplikat.
 
 ---
 

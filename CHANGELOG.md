@@ -12,6 +12,31 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0n. Remote management: ZTE auto-create + cakupan semua vendor sekali klik
+
+- **ZTE sekali klik:** bila instance `Firewall.X_ZTE-COM_ServiceControl.`
+  `IPV4ServiceControl.1` belum ada, ACS otomatis `AddObject` objeknya lalu
+  mengisi `ServiceType`/`Ingress` dan `Enable=true` (rantai AddObject→SPV,
+  seperti alur WAN-add). Tidak perlu lagi langkah manual AddObject.
+- **Cakupan keluarga** (`planRemoteAccess`): Huawei/FiberHome/ZTE pakai skema
+  keluarganya; **CMCC** (firmware China di hardware ZTE) pakai skema ZTE;
+  **CT-COM/CU/Nokia/belum terdeteksi** mencoba semua skema (Huawei+FiberHome+
+  ZTE) — aman karena tiap path satu per SPV (9005 terisolasi).
+- **Status remote dibaca:** master toggle tiap keluarga
+  (`X_HW_Security.AclServices.HTTPWanEnable`, `X_FH_FireWall.REMOTEACCEnable`,
+  ZTE `…IPV4ServiceControl.1.Enable`) masuk path esensial — pola kandidat
+  redaman (yang tak ada ditandai invalid sekali, lalu dilewati). Membuat path
+  yang cocok "terbukti" (ditulis satu batch) dan mencegah ACS membuat aturan
+  ServiceControl ZTE **duplikat** saat instance sudah ada.
+- Referensi parameter diverifikasi lintas provision GenieACS komunitas
+  (safrinnetwork, beryindo, alijayanet) yang menyepakati set identik; teruji
+  lapangan untuk FiberHome, dilengkapi untuk Huawei & ZTE.
+- **File:** `vendorwan.ts` (skema per keluarga + `RemoteAddObject`),
+  `configure.ts` (antre AddObject ZTE), `modelpaths.ts` (3 master toggle),
+  `sim.mjs`+`wan.mjs` (uji direct + auto-create ZTE).
+
+---
+
 ## 0m. Remote management: parameter vendor lapangan (perbaikan 9003)
 
 - **Penyebab:** versi awal (0l) memakai standar TR-069

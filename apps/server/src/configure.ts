@@ -691,6 +691,16 @@ function applyRemoteMgmt(ctx: CwmpContext, db: Database, deviceId: string, k: Kn
   for (const f of plan.fills.filter((f) => !f.proven)) {
     queueWrite(ctx, db, deviceId, rep, [{ name: f.name, type: f.type, value: f.value }], `${label}: ${f.name.split('.').slice(-2).join('.')}`, 'cfg_remote');
   }
+  // ZTE tanpa instance ServiceControl: buat objek dulu, lalu isi + Enable.
+  if (plan.addObject) {
+    const a = plan.addObject;
+    const key = `cfg_remote_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    db.createTask(key, deviceId, 'add_object', { objectName: a.objectName, fills: a.fills, finalFills: a.finalFills, label: a.label }, WRITE_TTL_MS);
+    enqueueAddObject(ctx, deviceId, a.objectName, key);
+    rep.queued++;
+    rep.tasks.push(key);
+    rep.plan.push(`${a.label}: AddObject ${a.objectName} → isi ServiceType/Ingress, lalu Enable=true`);
+  }
   // Catatan informatif saat ada yang diantre; jadi alasan gagal bila tidak.
   if (plan.note) (rep.queued ? rep.plan : rep.skipped).push(plan.note);
   if (!rep.queued && !plan.note) rep.skipped.push('Tidak ada parameter remote management yang bisa ditulis');

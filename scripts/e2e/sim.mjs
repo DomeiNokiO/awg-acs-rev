@@ -72,10 +72,16 @@ export function makeDevice(vendor, serial, opts = {}) {
     put(`${P}X_FH_Remoteweblogin.webloginenable`, '0');
     put(`${P}X_FH_ACL.Enable`, '0');
   } else if (vendor === 'zte') {
-    const zr = `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`;
-    put(`${zr}Enable`, 'false');
-    put(`${zr}Ingress`, 'LAN_ALL');
-    put(`${zr}ServiceType`, 'HTTP');
+    if (opts.zteNoRemote) {
+      // Firmware tanpa instance ServiceControl: hanya kontainer (tabel) ada,
+      // jadi ACS harus AddObject dulu sebelum mengisi (uji alur one-shot).
+      extraObjects.add(`${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.`);
+    } else {
+      const zr = `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`;
+      put(`${zr}Enable`, 'false');
+      put(`${zr}Ingress`, 'LAN_ALL');
+      put(`${zr}ServiceType`, 'HTTP');
+    }
   }
   if (vendor === 'zte') {
     put(`${ppp}X_ZTE-COM_VLANID`, '100');

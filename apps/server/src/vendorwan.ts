@@ -260,7 +260,14 @@ export interface RemoteAccessOptions {
 /** Satu parameter remote access; `proven` = path terbukti ada di perangkat. */
 export interface RemoteFill extends Fill { proven: boolean }
 
-export interface RemotePlan { fills: RemoteFill[]; guessed: string[]; note?: string }
+/**
+ * Objek yang perlu dibuat dulu sebelum diisi (ZTE: instance ServiceControl
+ * belum ada). `fills` diisi ke instans baru lebih dulu, `finalFills` (Enable)
+ * terakhir — sama seperti alur AddObject WAN.
+ */
+export interface RemoteAddObject { objectName: string; fills: Fill[]; finalFills: Fill[]; label: string }
+
+export interface RemotePlan { fills: RemoteFill[]; guessed: string[]; note?: string; addObject?: RemoteAddObject }
 
 /**
  * Rencana membuka/menutup remote management (akses WAN ke ONU) untuk SEMUA
@@ -312,49 +319,76 @@ export function planRemoteAccess(e: Evidence, root: string, o: RemoteAccessOptio
   }
   const P = root;
 
-  // --- Huawei: ACL per protokol + FirewallLevel wajib "Custom" ---
+  // Probe per keluarga (terbukti ada di unit ini → batch; override famili).
   const acl = `${P}X_HW_Security.AclServices.`;
-  const hwProven = e.exists(`${acl}HTTPWanEnable`) || e.exists(`${acl}TELNETWanEnable`);
-  if (hwProven || e.family === 'huawei') {
-    const pr = hwProven;
+  const hwProbe = e.exists(`${acl}HTTPWanEnable`) || e.exists(`${acl}TELNETWanEnable`);
+  const fhProbe = e.exists(`${P}X_FH_FireWall.REMOTEACCEnable`);
+  const zteProbe = e.exists(`${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.Enable`);
+
+  // Keluarga mana yang dicoba. Keluarga pasti → skemanya sendiri; CMCC =
+  // firmware China di hardware ZTE → skema ZTE; selain itu (CT-COM/CU/Nokia/
+  // belum terdeteksi) → coba semua (aman: tiap path satu per SPV). Bukti path
+  // selalu menambah skema terkait, apa pun nama pabrikannya.
+  const attempt = new Set<Family>();
+  if (e.family === 'huawei' || e.family === 'fiberhome' || e.family === 'zte') attempt.add(e.family);
+  else if (e.family === 'cmcc') attempt.add('zte');
+  else { attempt.add('huawei'); attempt.add('fiberhome'); attempt.add('zte'); }
+  if (hwProbe) attempt.add('huawei');
+  if (fhProbe) attempt.add('fiberhome');
+  if (zteProbe) attempt.add('zte');
+
+  // --- Huawei: ACL per protokol + FirewallLevel wajib "Custom" ---
+  if (attempt.has('huawei')) {
     const map: [string, boolean][] = [
       ['HTTPWanEnable', o.protocols.http], ['HTTPSWanEnable', o.protocols.https],
       ['TELNETWanEnable', o.protocols.telnet], ['SSHWanEnable', o.protocols.ssh],
     ];
-    for (const [leaf, want] of map) add(`${acl}${leaf}`, 'xsd:boolean', b(on && want), pr);
+    for (const [leaf, want] of map) add(`${acl}${leaf}`, 'xsd:boolean', b(on && want), hwProbe);
     // Tanpa FirewallLevel=Custom, akses WAN tetap diblokir firewall Huawei.
-    if (on) add(`${P}X_HW_Security.X_HW_FirewallLevel`, 'xsd:string', 'Custom', pr);
+    if (on) add(`${P}X_HW_Security.X_HW_FirewallLevel`, 'xsd:string', 'Custom', hwProbe);
     // Ping ke IP WAN: IcmpEchoReplyEn (1 = balas). Hanya saat diminta.
     if (o.protocols.ping) add(`${P}X_HW_Security.Dosfilter.IcmpEchoReplyEn`, 'xsd:string', on ? '1' : '0', e.exists(`${P}X_HW_Security.Dosfilter.IcmpEchoReplyEn`));
   }
 
   // --- FiberHome: firewall remote + web login + ACL ---
-  const fhMaster = `${P}X_FH_FireWall.REMOTEACCEnable`;
-  const fhProven = e.exists(fhMaster);
-  if (fhProven || e.family === 'fiberhome') {
-    const pr = fhProven;
-    add(fhMaster, 'xsd:boolean', b(on), pr);
+  if (attempt.has('fiberhome')) {
+    add(`${P}X_FH_FireWall.REMOTEACCEnable`, 'xsd:boolean', b(on), fhProbe);
     // Web GUI (HTTP) khusus FiberHome; nilai string "1"/"0".
     add(`${P}X_FH_Remoteweblogin.webloginenable`, 'xsd:string', on && (o.protocols.http || o.protocols.https) ? '1' : '0', e.exists(`${P}X_FH_Remoteweblogin.webloginenable`));
     if (on) add(`${P}X_FH_ACL.Enable`, e.typeFor(`${P}X_FH_ACL.Enable`, 'xsd:unsignedInt'), '1', e.exists(`${P}X_FH_ACL.Enable`));
   }
 
-  // --- ZTE: ServiceControl instance 1 (web). Butuh instance ada. ---
-  const zteBase = `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`;
-  const zteProven = e.exists(`${zteBase}Enable`);
-  if (zteProven || e.family === 'zte') {
-    const pr = zteProven;
-    add(`${zteBase}Enable`, 'xsd:boolean', b(on), pr);
-    if (on) {
-      add(`${zteBase}Ingress`, 'xsd:string', 'WAN_ALL', pr);
-      add(`${zteBase}ServiceType`, 'xsd:string', o.protocols.https && !o.protocols.http ? 'HTTPS' : 'HTTP', pr);
+  // --- ZTE: ServiceControl instance 1. Bila instance belum ada, DIBUAT dulu
+  //     (AddObject) lalu diisi, supaya sekali klik langsung membuka web. ---
+  if (attempt.has('zte')) {
+    const z1 = `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.`;
+    const stype = o.protocols.https && !o.protocols.http ? 'HTTPS' : 'HTTP';
+    if (zteProbe) {
+      add(`${z1}Enable`, 'xsd:boolean', b(on), true);
+      if (on) { add(`${z1}Ingress`, 'xsd:string', 'WAN_ALL', true); add(`${z1}ServiceType`, 'xsd:string', stype, true); }
+    } else if (on && (e.family === 'zte' || e.family === 'cmcc')) {
+      // Keluarga ZTE tanpa instance → buat instance ServiceControl lalu isi.
+      out.addObject = {
+        objectName: `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.`,
+        fills: [
+          { name: 'ServiceType', type: 'xsd:string', value: stype },
+          { name: 'Ingress', type: 'xsd:string', value: 'WAN_ALL' },
+        ],
+        finalFills: [{ name: 'Enable', type: 'xsd:boolean', value: 'true' }],
+        label: 'Remote management ZTE: buat ServiceControl',
+      };
+    } else if (on) {
+      // Shotgun (keluarga tak dikenal): coba langsung instance 1, satu per SPV.
+      add(`${z1}Enable`, 'xsd:boolean', b(on), false);
+      add(`${z1}Ingress`, 'xsd:string', 'WAN_ALL', false);
+      add(`${z1}ServiceType`, 'xsd:string', stype, false);
     }
   }
 
-  if (!out.fills.length) {
+  if (!out.fills.length && !out.addObject) {
     out.note = 'Parameter remote management perangkat ini belum diketahui — isi lewat "Parameter tambahan" atau set di OLT.';
-  } else if (!out.fills.some((f) => f.proven)) {
-    out.note = 'Parameter remote dikirim satu per satu (belum terkonfirmasi di unit ini) — path standar-lapangan untuk keluarga vendornya. Pantau hasil per parameter di tab Peristiwa/Antrean Tugas.';
+  } else if (!out.fills.some((f) => f.proven) && out.fills.length) {
+    out.note = 'Parameter remote dikirim satu per satu (belum terkonfirmasi di unit ini) — path standar-lapangan per keluarga vendor. Pantau hasil tiap parameter di tab Peristiwa/Antrean Tugas.';
   }
   return out;
 }

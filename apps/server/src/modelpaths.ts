@@ -46,6 +46,13 @@ export const PATH_INFO_098: string[] = [
   `${P}DeviceInfo.ProcessStatus.CPUUsage`,
   `${P}DeviceInfo.MemoryStatus.Total`,
   `${P}DeviceInfo.MemoryStatus.Free`,
+  // Master toggle remote management per keluarga vendor (status + bukti untuk
+  // konfigurasi). Seperti kandidat redaman: yang tak didukung ditandai invalid
+  // sekali (split-on-fault) lalu tak pernah dikirim lagi. Tahu instance ZTE
+  // ada mencegah AddObject membuat aturan ServiceControl duplikat.
+  `${P}X_HW_Security.AclServices.HTTPWanEnable`,                       // Huawei
+  `${P}X_FH_FireWall.REMOTEACCEnable`,                                 // FiberHome
+  `${P}Firewall.X_ZTE-COM_ServiceControl.IPV4ServiceControl.1.Enable`, // ZTE
 ];
 
 /** Keluarga vendor untuk memilih kandidat redaman yang dicoba lebih dulu. */
