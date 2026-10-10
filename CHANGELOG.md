@@ -12,6 +12,28 @@ Huawei, TR-181, dan firmware yang hanya menjawab satu tingkat
 
 ---
 
+## 0l. Remote management ONU (akses WAN) — semua vendor
+
+- **Fitur baru:** satu tombol di **Konfigurasi → Perangkat** untuk
+  mengaktifkan/menonaktifkan akses manajemen ONU dari sisi WAN (web GUI
+  HTTP/HTTPS, Telnet, SSH, Ping) beserta port opsional. Jenis config baru
+  `remote-mgmt` (`POST /api/devices/:id/config`).
+- **Lintas vendor** dengan pola yang sama seperti VLAN/binding: path yang
+  **terbukti** ada diantre sekaligus, tebakan diantre satu per SPV (9005 pada
+  satu nama tidak menggagalkan sisanya).
+  - **Standar TR-069** `UserInterface.RemoteAccess.Enable/Port/Protocol`
+    (TR-098 `InternetGatewayDevice.`, TR-181 `Device.`) — jalur universal.
+  - **Huawei** `X_HW_Security.AclServices.{HTTP,HTTPS,TELNET,SSH,PING}WanEnable`
+    + `HTTPWanPort`; satu leaf terbukti → seluruh objek ACL dianggap ada.
+- `UserInterface.RemoteAccess.Enable` dan `X_HW_Security.AclServices.HTTPWanEnable`
+  ikut path esensial (`modelpaths.ts`) agar statusnya terbaca dan jadi bukti.
+- **File:** `vendorwan.ts` (`planRemoteAccess`), `configure.ts`
+  (`applyRemoteMgmt`, type `remote-mgmt`), `modelpaths.ts`, `Configurator.tsx`
+  (panel Remote Management), `scripts/e2e/sim.mjs` + `wan.mjs` (uji Huawei ACL
+  per protokol + ZTE via standar, aktif/nonaktif).
+
+---
+
 ## 0k. FiberHome RP2872: URL Connection Request port tak valid
 
 - **Penyebab:** firmware FiberHome RP2872 melaporkan `ConnectionRequestURL`

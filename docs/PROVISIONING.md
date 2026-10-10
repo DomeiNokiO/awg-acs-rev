@@ -199,6 +199,7 @@ Tanpa `target`, dipakai koneksi PPPoE utama (punya username, utamakan yang Conne
 | `wan-delete` | `target` | DeleteObject WCD (bila koneksi satu-satunya) atau koneksinya |
 | `wan-enable` | `target`, `enable` | SPV `Enable` koneksi |
 | `inform-interval` | `informInterval` (60–86400) | SPV `ManagementServer.PeriodicInformEnable/Interval` |
+| `remote-mgmt` | `enable`, `protocols?` (`http`/`https`/`telnet`/`ssh`/`ping`), `port?` | Buka/tutup akses manajemen ONU dari WAN — lintas vendor (lihat bawah) |
 
 Perintah perangkat (endpoint terpisah): `POST /reboot`, `POST /factory-reset`
 (admin + `{"confirm":"<serial number>"}`), `POST /connect`, `POST /refresh`.
@@ -216,6 +217,35 @@ tidak ada yang diantrekan → HTTP 400 dengan `error` berisi alasannya.
   `IEEE11iEncryptionModes=AESEncryption` bila ada). Nilai `WPA2PSK` versi
   lama tidak sah di TR-098 dan membuat seluruh SPV ditolak.
 - TR-181: `WiFi.SSID.N.SSID`, `WiFi.AccessPoint.N.Security.KeyPassphrase`.
+
+### Remote management (akses WAN ke ONU) — `planRemoteAccess`
+
+Membuka akses manajemen ONU (web GUI / Telnet / SSH / Ping) dari sisi WAN,
+berlaku **semua vendor** lewat dua lapis yang dipilih dari bukti path:
+
+1. **Standar TR-069 `UserInterface.RemoteAccess`** — jalur universal.
+   `Enable` (bool) selalu dicoba; `Port` & `Protocol` hanya ditulis bila
+   terbukti ada (`Protocol` adalah enum yang nilainya berbeda antar firmware,
+   menebaknya berisiko 9007). Root mengikuti data model:
+   `InternetGatewayDevice.` (TR-098) atau `Device.` (TR-181).
+2. **Huawei `X_HW_Security.AclServices.*WanEnable`** (TR-098) — satu boolean
+   per protokol (`HTTP`, `HTTPS`, `TELNET`, `SSH`, `PING`) plus `HTTPWanPort`.
+   Dipakai bila terbukti ada, atau bila keluarga = huawei (lalu dilaporkan
+   `guessed`). Satu leaf terbukti → seluruh objek ACL dianggap ada (sekerabat,
+   firmware sama), jadi tidak semua ditebak satu per satu.
+
+Aturan sama seperti VLAN/binding: path **terbukti** diantre dalam satu SPV
+(pasti berlaku); path **tebakan** diantre **satu per SPV**, sehingga nama yang
+salah hanya menggagalkan dirinya (9005), bukan seluruh batch. Saat `enable`
+tanpa memilih protokol, default membuka web GUI (`http`+`https`). Path
+`UserInterface.RemoteAccess.Enable` dan `X_HW_Security.AclServices.HTTPWanEnable`
+ikut dibaca di path esensial (`modelpaths.ts`) agar statusnya terbaca dan
+menjadi bukti untuk konfigurasi berikutnya.
+
+> Keamanan: membuka manajemen ke internet memperbesar permukaan serangan.
+> Batasi sumber IP di firewall OLT dan matikan protokol yang tidak dipakai.
+> Parameter vendor non-Huawei yang belum punya path standar bisa diisi lewat
+> tab Perintah → SetParameterValues.
 
 ### Pengetahuan vendor WAN (`vendorwan.ts`)
 

@@ -239,6 +239,95 @@ export function planBinding(
 }
 
 /* ------------------------------------------------------------------ *
+ * Remote management (akses manajemen ONU dari sisi WAN)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Protokol akses manajemen yang bisa dibuka ke WAN. HTTP/HTTPS = web GUI
+ * ONU; Telnet/SSH = shell; Ping = ICMP ke IP WAN ONU.
+ */
+export interface RemoteProtocols {
+  http: boolean; https: boolean; telnet: boolean; ssh: boolean; ping: boolean;
+}
+
+export interface RemoteAccessOptions {
+  enable: boolean;
+  protocols: RemoteProtocols;
+  /** Port web GUI di WAN (standar RemoteAccess.Port / Huawei HTTPWanPort). */
+  port?: number;
+}
+
+/** Satu parameter remote access; `proven` = path terbukti ada di perangkat. */
+export interface RemoteFill extends Fill { proven: boolean }
+
+export interface RemotePlan { fills: RemoteFill[]; guessed: string[]; note?: string }
+
+/**
+ * Rencana membuka/menutup remote management untuk SEMUA vendor.
+ *
+ * Dua lapis, dipilih dari bukti path:
+ *  1. Standar TR-069 `UserInterface.RemoteAccess.Enable/Port/Protocol`
+ *     (berlaku TR-098 `InternetGatewayDevice.` dan TR-181 `Device.`) —
+ *     inilah jalur universal lintas merek.
+ *  2. Huawei `X_HW_Security.AclServices.*WanEnable` (per protokol) — hanya
+ *     TR-098, dipakai bila terbukti ada atau keluarga = huawei.
+ *
+ * `root` = `InternetGatewayDevice.` atau `Device.` (berakhiran titik).
+ * Nama yang TERBUKTI ada selalu dipakai; tebakan keluarga ditandai `guessed`
+ * supaya operator tahu bila perangkat mungkin menolaknya (SPV atomik → path
+ * guessed diantre satu per SPV di configure.ts, tidak menggagalkan yang lain).
+ */
+export function planRemoteAccess(e: Evidence, root: string, o: RemoteAccessOptions): RemotePlan {
+  const out: RemotePlan = { fills: [], guessed: [] };
+  // `proven` boleh dipaksa: leaf sekerabat dalam satu objek (mis. semua
+  // `AclServices.*WanEnable`) hidup/mati bersama firmware-nya — bila salah
+  // satu terbukti ada, sisanya ada juga, jadi tidak perlu ditebak.
+  const add = (name: string, type: XsdType, value: string, proven: boolean): void => {
+    out.fills.push({ name, type, value, proven });
+    if (!proven) out.guessed.push(name);
+  };
+  const b = (v: boolean) => (v ? 'true' : 'false');
+
+  // --- Lapis 1: standar UserInterface.RemoteAccess (universal) ---
+  const ra = `${root}UserInterface.RemoteAccess.`;
+  const raEnable = `${ra}Enable`;
+  // Enable standar selalu dicoba — ini path TR-069 resmi yang paling luas
+  // didukung. Bila tak terbukti, tetap diantre sebagai tebakan.
+  add(raEnable, e.typeFor(raEnable, 'xsd:boolean'), b(o.enable), e.exists(raEnable));
+  if (o.enable) {
+    // Port & Protocol hanya ditulis bila terbukti ada: Protocol adalah enum
+    // (HTTP/HTTPS/Telnet) yang nilainya berbeda antar firmware — menebaknya
+    // berisiko 9007 dan menggagalkan batch.
+    if (o.port && e.exists(`${ra}Port`)) add(`${ra}Port`, e.typeFor(`${ra}Port`, 'xsd:unsignedInt'), String(o.port), true);
+    if (e.exists(`${ra}Protocol`)) {
+      add(`${ra}Protocol`, 'xsd:string', o.protocols.https && !o.protocols.http ? 'HTTPS' : 'HTTP', true);
+    }
+  }
+
+  // --- Lapis 2: Huawei X_HW_Security.AclServices (per protokol, TR-098) ---
+  if (root === 'InternetGatewayDevice.') {
+    const acl = `${root}X_HW_Security.AclServices.`;
+    // Satu leaf terbukti → seluruh objek ACL ada (sekerabat, firmware sama).
+    const aclProven = e.exists(`${acl}HTTPWanEnable`) || e.exists(`${acl}HTTPSWanEnable`);
+    const useHw = aclProven || e.family === 'huawei';
+    if (useHw) {
+      const wan: [string, boolean][] = [
+        ['HTTPWanEnable', o.protocols.http], ['HTTPSWanEnable', o.protocols.https],
+        ['TELNETWanEnable', o.protocols.telnet], ['SSHWanEnable', o.protocols.ssh],
+        ['PINGWanEnable', o.protocols.ping],
+      ];
+      for (const [leaf, on] of wan) add(`${acl}${leaf}`, 'xsd:boolean', b(o.enable && on), aclProven);
+      if (o.enable && o.port) add(`${acl}HTTPWanPort`, e.typeFor(`${acl}HTTPWanPort`, 'xsd:unsignedInt'), String(o.port), aclProven);
+    }
+  }
+
+  if (!out.fills.some((f) => f.proven)) {
+    out.note = 'Parameter remote management perangkat ini belum terbukti — nilai dikirim sebagai tebakan; bila ditolak, isi lewat "Parameter tambahan" atau set di OLT.';
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ *
  * Parameter standar koneksi
  * ------------------------------------------------------------------ */
 

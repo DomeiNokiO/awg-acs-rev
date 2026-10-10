@@ -418,6 +418,7 @@ Ubah/Hapus) dan semua SSID (tombol Ubah). Tab **Konfigurasi**:
 | Binding koneksi yang ada | `{"type":"wan-bind","target":…,"bindLan":[1,2,3,4],"bindSsid":[1]}` | SPV binding; WAN FiberHome tanpa binding ditandai di tabel WAN |
 | Hapus / aktif-nonaktif WAN | `{"type":"wan-delete","target":…}` / `{"type":"wan-enable","target":…,"enable":false}` | `DeleteObject` / SPV `Enable` |
 | Interval Inform | `{"type":"inform-interval","informInterval":600}` | SPV `ManagementServer.PeriodicInformInterval` |
+| **Remote management** (akses WAN ke ONU, semua vendor) | `{"type":"remote-mgmt","enable":true,"protocols":["http","https"],"port":8443}` | SPV standar `UserInterface.RemoteAccess.Enable/Port/Protocol` + ACL Huawei `X_HW_Security.AclServices.*WanEnable`; `enable:false` menutup akses |
 | Reboot / reset pabrik | `POST /reboot` / `POST /factory-reset {"confirm":"<serial>"}` (admin) | `Reboot` / `FactoryReset` |
 
 **Sandi terbuka.** Tabel WAN dan WiFi di Ringkasan menampilkan sandi PPPoE dan

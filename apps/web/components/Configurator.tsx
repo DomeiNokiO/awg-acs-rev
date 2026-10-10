@@ -105,6 +105,9 @@ export function Configurator({ deviceId, serial, insight, caps, preset, onQueued
   // perangkat
   const [interval, setInterval_] = useState('300');
   const [resetConfirm, setResetConfirm] = useState('');
+  // remote management (akses WAN ke ONU)
+  const [rmProtocols, setRmProtocols] = useState<string[]>(['http', 'https']);
+  const [rmPort, setRmPort] = useState('');
 
   const conn = insight.wan.find((c) => c.base === target) ?? null;
 
@@ -345,6 +348,36 @@ export function Configurator({ deviceId, serial, insight, caps, preset, onQueued
                   Terapkan interval
                 </button>
                 <small className="text-muted ms-2">300–3600 disarankan; terlalu kecil membebani ONU &amp; ACS.</small>
+              </div>
+            </div>
+
+            <div className="border rounded p-2">
+              <div className="small fw-semibold mb-1"><i className="fa-solid fa-tower-broadcast text-primary me-1" />Remote Management (akses WAN ke ONU)</div>
+              <div className="small text-muted mb-2">
+                Membuka akses manajemen ONU (web GUI / Telnet / SSH) dari sisi WAN untuk semua vendor.
+                ACS memilih parameternya otomatis: standar TR-069 <code>UserInterface.RemoteAccess</code>,
+                plus ACL <code>X_HW_Security</code> untuk Huawei. <span className="text-warning">Hati-hati: membuka manajemen ke internet memperbesar permukaan serangan — batasi di firewall OLT.</span>
+              </div>
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-2" role="group" aria-label="Protokol remote">
+                {([['http', 'HTTP'], ['https', 'HTTPS'], ['telnet', 'Telnet'], ['ssh', 'SSH'], ['ping', 'Ping']] as const).map(([k, label]) => (
+                  <button key={k} type="button" aria-pressed={rmProtocols.includes(k)}
+                    className={`btn btn-sm ${rmProtocols.includes(k) ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    onClick={() => setRmProtocols((p) => p.includes(k) ? p.filter((x) => x !== k) : [...p, k])}>
+                    {label}
+                  </button>
+                ))}
+                <input className={inputCls} style={{ maxWidth: 130 }} type="number" min={1} max={65535} value={rmPort}
+                  onChange={(e) => setRmPort(e.target.value)} placeholder="port (opsional)" />
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || !rmProtocols.length}
+                  onClick={() => void send('config', { type: 'remote-mgmt', enable: true, protocols: rmProtocols, ...(rmPort ? { port: Number(rmPort) } : {}) })}>
+                  <i className="fa-solid fa-lock-open me-1" />Aktifkan remote
+                </button>
+                <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy}
+                  onClick={() => void send('config', { type: 'remote-mgmt', enable: false, protocols: rmProtocols })}>
+                  <i className="fa-solid fa-lock me-1" />Nonaktifkan remote
+                </button>
               </div>
             </div>
 

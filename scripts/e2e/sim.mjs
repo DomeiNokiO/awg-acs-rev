@@ -60,6 +60,15 @@ export function makeDevice(vendor, serial, opts = {}) {
   put(`${P}LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase`, opts.wifiPass ?? '');
   put(`${P}LANDevice.1.WLANConfiguration.1.Enable`, 'true');
   put(`${P}LANDevice.1.WLANConfiguration.1.SSIDAdvertisementEnabled`, 'true');
+  // Remote management: standar TR-069 untuk semua, ACL Huawei untuk Huawei.
+  put(`${P}UserInterface.RemoteAccess.Enable`, 'false');
+  put(`${P}UserInterface.RemoteAccess.Port`, '8080');
+  if (vendor === 'huawei') {
+    for (const leaf of ['HTTPWanEnable', 'HTTPSWanEnable', 'TELNETWanEnable', 'SSHWanEnable', 'PINGWanEnable']) {
+      put(`${P}X_HW_Security.AclServices.${leaf}`, 'false');
+    }
+    put(`${P}X_HW_Security.AclServices.HTTPWanPort`, '80');
+  }
   if (vendor === 'zte') {
     put(`${ppp}X_ZTE-COM_VLANID`, '100');
     put(`${ppp}X_ZTE-COM_VLANEnable`, 'true');

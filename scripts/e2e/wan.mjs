@@ -98,4 +98,28 @@ t.check(r.status === 200 && !r.body.plan.join(' ').includes('ZTE-COM'), `ZTE fir
 await settle(zcm, acs.cwmp, '6 CONNECTION REQUEST');
 const zcLink = `${W}${zc.wcd}.X_CMCC_WANGponLinkConfig.VLANIDMark`;
 t.check(zcm.V.get(zcLink) === '600' && !zcm.errors.length, `ZTE firmware CMCC: VLAN 600 di X_CMCC_WANGponLinkConfig, tanpa fault`);
+
+// Remote management (akses WAN ke ONU) — lintas vendor.
+const P = 'InternetGatewayDevice.';
+const RA = `${P}UserInterface.RemoteAccess.Enable`;
+const ACL = `${P}X_HW_Security.AclServices.`;
+// Huawei: standar RemoteAccess + ACL per protokol; buka HTTP/HTTPS/Ping.
+r = await acs.call('POST', `/api/devices/${idOf(hw)}/config`, { type: 'remote-mgmt', enable: true, protocols: ['http', 'https', 'ping'], port: 8443 });
+t.check(r.status === 200 && !r.body.guessed.length, `Huawei remote-mgmt tanpa tebakan (${r.body.plan.join('; ')})`);
+await settle(hw, acs.cwmp, '6 CONNECTION REQUEST');
+t.check(hw.V.get(RA) === 'true' && hw.V.get(`${ACL}HTTPWanEnable`) === 'true' && hw.V.get(`${ACL}HTTPSWanEnable`) === 'true'
+  && hw.V.get(`${ACL}PINGWanEnable`) === 'true' && hw.V.get(`${ACL}TELNETWanEnable`) === 'false' && hw.V.get(`${ACL}SSHWanEnable`) === 'false'
+  && hw.V.get(`${ACL}HTTPWanPort`) === '8443' && !hw.errors.length,
+  `Huawei: RemoteAccess + ACL per protokol diset (HTTP/HTTPS/Ping on, Telnet/SSH off, port 8443)`);
+
+// ZTE: tanpa ACL Huawei → hanya standar RemoteAccess, tetap tanpa tebakan.
+r = await acs.call('POST', `/api/devices/${idOf(zte)}/config`, { type: 'remote-mgmt', enable: true, protocols: ['http'] });
+t.check(r.status === 200 && !r.body.guessed.length && !r.body.plan.join(' ').includes('X_HW_'), `ZTE remote-mgmt lewat standar TR-069 saja`);
+await settle(zte, acs.cwmp, '6 CONNECTION REQUEST');
+t.check(zte.V.get(RA) === 'true' && !zte.errors.length, 'ZTE: RemoteAccess.Enable=true');
+// Nonaktifkan lagi.
+await acs.call('POST', `/api/devices/${idOf(zte)}/config`, { type: 'remote-mgmt', enable: false });
+await settle(zte, acs.cwmp, '6 CONNECTION REQUEST');
+t.check(zte.V.get(RA) === 'false', 'ZTE: RemoteAccess.Enable=false (nonaktif)');
+
 t.done(acs);

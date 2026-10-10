@@ -28,7 +28,7 @@ import {
 import { extractWan, extractWlan, extractWcds, observedConnTypes, isPassphraseValue, type WanConn, type DataModel } from './insight.ts';
 import {
   planVlan as vendorVlan, planService as vendorService, planBinding, planStandard, bindingRequired, natDefault,
-  chooseConnectionType, detectFamily, type Evidence, type Family, type Fill,
+  chooseConnectionType, detectFamily, planRemoteAccess, type Evidence, type Family, type Fill, type RemoteProtocols,
 } from './vendorwan.ts';
 
 export type XsdType =
@@ -46,10 +46,11 @@ export type ConfigType =
   | 'wan-delete'  // hapus koneksi WAN
   | 'wan-enable'  // aktif/nonaktifkan koneksi WAN
   | 'wan-bind'    // binding port LAN/SSID ke koneksi WAN yang ada
-  | 'inform-interval'; // interval Inform periodik ONU
+  | 'inform-interval' // interval Inform periodik ONU
+  | 'remote-mgmt'; // remote management (akses manajemen ONU dari WAN)
 
 export const CONFIG_TYPES: ConfigType[] = [
-  'wifi', 'pppoe', 'vlan', 'wan-add', 'wan-ip-add', 'wan-delete', 'wan-enable', 'wan-bind', 'inform-interval',
+  'wifi', 'pppoe', 'vlan', 'wan-add', 'wan-ip-add', 'wan-delete', 'wan-enable', 'wan-bind', 'inform-interval', 'remote-mgmt',
 ];
 
 /**
@@ -101,6 +102,11 @@ export interface ConfigRequest {
   enable?: boolean;
   // inform-interval (detik)
   informInterval?: number;
+  // remote-mgmt: enable (pakai field `enable` di atas), protokol, port WAN
+  /** Protokol WAN yang dibuka: subset dari http/https/telnet/ssh/ping. */
+  protocols?: string[];
+  /** Port web GUI di WAN (opsional). */
+  port?: number;
 }
 
 export interface ConfigReport {
@@ -654,6 +660,41 @@ function applyInformInterval(ctx: CwmpContext, db: Database, deviceId: string, k
   ], `Interval Inform ${n} detik`, 'cfg_inform');
 }
 
+/**
+ * Remote management: buka/tutup akses manajemen ONU dari sisi WAN untuk
+ * SEMUA vendor. Jalur universal = standar TR-069 `UserInterface.RemoteAccess`;
+ * Huawei ditambah ACL per protokol (`X_HW_Security.AclServices`). Path yang
+ * terbukti ada diantre sekaligus (pasti berlaku); path tebakan diantre satu
+ * per SPV supaya nama yang salah tidak menggagalkan yang lain.
+ */
+function applyRemoteMgmt(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
+  if (typeof req.enable !== 'boolean') { rep.skipped.push('Nilai enable wajib true/false'); return; }
+  const sel = new Set((Array.isArray(req.protocols) ? req.protocols : []).map((p) => String(p).toLowerCase()));
+  // Saat mengaktifkan tanpa memilih protokol, buka web GUI (HTTP+HTTPS) —
+  // kebutuhan teknisi paling umum. Saat menonaktifkan, protokol tak dipakai.
+  const protocols: RemoteProtocols = req.enable && sel.size === 0
+    ? { http: true, https: true, telnet: false, ssh: false, ping: false }
+    : { http: sel.has('http'), https: sel.has('https'), telnet: sel.has('telnet'), ssh: sel.has('ssh'), ping: sel.has('ping') };
+  const port = Number.isInteger(Number(req.port)) && Number(req.port) >= 1 && Number(req.port) <= 65535 ? Number(req.port) : undefined;
+  if (req.port !== undefined && req.port !== null && String(req.port) !== '' && port === undefined) {
+    rep.skipped.push('Port harus 1..65535'); return;
+  }
+
+  const root = k.model === 'TR-181' ? 'Device.' : 'InternetGatewayDevice.';
+  const plan = planRemoteAccess(evidence(k), root, { enable: req.enable, protocols, port });
+  if (plan.note) rep.skipped.push(plan.note);
+  rep.guessed.push(...plan.guessed);
+
+  const label = req.enable ? 'Remote management: aktifkan' : 'Remote management: nonaktifkan';
+  const proven = plan.fills.filter((f) => f.proven).map(({ name, type, value }) => ({ name, type, value }));
+  if (proven.length) queueWrite(ctx, db, deviceId, rep, proven, `${label} (terbukti)`, 'cfg_remote');
+  // Tebakan: satu per SPV — 9005 pada satu nama tidak membatalkan sisanya.
+  for (const f of plan.fills.filter((f) => !f.proven)) {
+    queueWrite(ctx, db, deviceId, rep, [{ name: f.name, type: f.type, value: f.value }], `${label}: ${f.name.split('.').slice(-2).join('.')}`, 'cfg_remote');
+  }
+  if (!rep.queued) rep.skipped.push('Tidak ada parameter remote management yang bisa ditulis');
+}
+
 function applyWanDelete(ctx: CwmpContext, db: Database, deviceId: string, k: Knowledge, req: ConfigRequest, rep: ConfigReport): void {
   if (typeof req.target !== 'string' || !TARGET_RE.test(req.target)) {
     rep.skipped.push('Target koneksi tidak valid'); return;
@@ -690,6 +731,7 @@ export function applyConfig(
     case 'wan-enable': applyWanEnable(ctx, db, deviceId, k, req, rep); break;
     case 'wan-bind': applyWanBind(ctx, db, deviceId, k, req, rep); break;
     case 'inform-interval': applyInformInterval(ctx, db, deviceId, k, req, rep); break;
+    case 'remote-mgmt': applyRemoteMgmt(ctx, db, deviceId, k, req, rep); break;
     default: rep.skipped.push(`jenis konfigurasi tidak dikenal: ${String(req.type)}`);
   }
   if (rep.guessed.length) {

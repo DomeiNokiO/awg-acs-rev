@@ -175,6 +175,26 @@ tersembunyi.
 
 ---
 
+## 6. Remote management (akses WAN ke ONU)
+
+Membuka manajemen ONU dari sisi WAN. Lintas vendor lewat standar TR-069,
+plus ACL per protokol untuk Huawei.
+
+| Parameter | Tipe | Keterangan |
+|-----------|------|------------|
+| `…UserInterface.RemoteAccess.Enable` | bool | Standar TR-098/TR-181 — jalur universal (root `InternetGatewayDevice.` atau `Device.`) |
+| `…UserInterface.RemoteAccess.Port` | unsignedInt | Port web GUI di WAN (ditulis bila terbukti ada) |
+| `…UserInterface.RemoteAccess.Protocol` | string (enum) | `HTTP`/`HTTPS`/… — ditulis bila terbukti ada (enum beda antar firmware) |
+| `InternetGatewayDevice.X_HW_Security.AclServices.HTTPWanEnable` | bool | Huawei — web GUI HTTP dari WAN |
+| `…AclServices.HTTPSWanEnable` / `TELNETWanEnable` / `SSHWanEnable` / `PINGWanEnable` | bool | Huawei — per protokol |
+| `…AclServices.HTTPWanPort` | unsignedInt | Huawei — port web GUI WAN |
+
+Path terbukti diantre sekaligus; tebakan diantre satu per SPV (9005 pada satu
+nama tidak menggagalkan sisanya). Vendor non-Huawei tanpa path khusus memakai
+standar `UserInterface.RemoteAccess`.
+
+---
+
 ## Laporan lapangan
 
 ### 2026-10-09 — 19 ONU, 6 kombinasi
